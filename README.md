@@ -7,7 +7,7 @@ Plugin WordPress métier pour cloner et adapter des pages locales, avec prise en
 Télécharger le ZIP installable :
 
 ```text
-https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v49-wordpress.zip
+https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v50-wordpress.zip
 ```
 
 Puis l'installer depuis WordPress :
@@ -32,7 +32,7 @@ WordPress proposera une mise à jour lorsqu'une version supérieure sera publié
 wp-summiteo/
   wp-summiteo.php
 releases/
-  wp-summiteo-v49-wordpress.zip
+  wp-summiteo-v50-wordpress.zip
 update.json
 ```
 
