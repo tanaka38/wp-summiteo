@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 46.0.0
+ * Version: 47.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '46.0.0';
+    const VERSION = '47.0.0';
     const OPTION = 'wp_summiteo_settings';
     const LEGACY_OPTION = 'goldinfo_ai_connector_settings';
     const NS = 'wp-summiteo/v1';
@@ -871,6 +871,7 @@ JS;
         if (is_wp_error($updated)) return $updated;
         clean_post_cache($page_id);
         $this->purge_page_cache($page_id);
+        $after_images = $this->collect_page_images($page_id);
         return [
             'success' => true,
             'page_id' => $page_id,
@@ -878,6 +879,7 @@ JS;
             'new_attachment_id' => $attachment_id,
             'new_url' => wp_get_attachment_url($attachment_id),
             'updated' => $updated,
+            'images_after' => $after_images,
         ];
     }
 
@@ -1039,6 +1041,7 @@ JS;
         $result = wp_update_post(['ID'=>$page_id, 'post_content'=>$new_content], true);
         if (is_wp_error($result)) return $result;
         $meta_updates = $this->replace_avia_image_in_meta($page_id, $old_attachment_id, $old_url, $attachment_id, $url);
+        $this->clear_avia_render_cache($page_id);
         clean_post_cache($page_id);
         return [
             'type'=>'avia_image',
@@ -1054,7 +1057,7 @@ JS;
         $updated = [];
         $all_meta = get_post_meta($page_id);
         foreach ($all_meta as $key => $values) {
-            if (strpos((string)$key, '_avia') !== 0 && strpos((string)$key, 'avia') === false) {
+            if (!$this->is_image_builder_meta_key((string)$key)) {
                 continue;
             }
             $new_values = [];
@@ -1077,6 +1080,15 @@ JS;
             }
         }
         return array_values(array_unique($updated));
+    }
+
+    private function is_image_builder_meta_key($key) {
+        $key = strtolower((string)$key);
+        if ($key === '') return false;
+        foreach (['avia', 'alb', 'builder', 'shortcode', 'layout', 'image', 'gallery', 'thumbnail'] as $needle) {
+            if (strpos($key, $needle) !== false) return true;
+        }
+        return false;
     }
 
     private function replace_image_refs_deep($value, $old_attachment_id, $old_url, $new_attachment_id, $new_url, &$changed = false) {
@@ -1152,6 +1164,33 @@ JS;
         if ($url) {
             do_action('litespeed_purge_url', $url);
         }
+        $litespeed_purge = 'LiteSpeed\\Purge';
+        if (class_exists($litespeed_purge)) {
+            if (method_exists($litespeed_purge, 'purge_post')) {
+                $litespeed_purge::purge_post($page_id);
+            }
+            if ($url && method_exists($litespeed_purge, 'purge_url')) {
+                $litespeed_purge::purge_url($url);
+            }
+        }
+        if (function_exists('litespeed_purge_post')) {
+            litespeed_purge_post($page_id);
+        }
+        if (class_exists('autoptimizeCache') && method_exists('autoptimizeCache', 'clearall')) {
+            autoptimizeCache::clearall();
+        }
+        if (function_exists('wp_cache_flush')) {
+            wp_cache_flush();
+        }
+    }
+
+    private function clear_avia_render_cache($page_id) {
+        delete_post_meta($page_id, '_avia_builder_shortcode_tree');
+        delete_post_meta($page_id, '_avia_builder_shortcode_tree_unfiltered');
+        delete_post_meta($page_id, '_aviaLayoutBuilderCleanData');
+        delete_post_meta($page_id, '_avia_builder_precompile');
+        do_action('ava_after_content_update', $page_id);
+        do_action('avia_builder_after_save_post', $page_id);
     }
 
     private function walk_elementor_replace_image(&$nodes, $element_id, $field, $attachment_id, $url, &$updated) {

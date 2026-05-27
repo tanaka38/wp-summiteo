@@ -1,13 +1,13 @@
 {
   "name": "WP Summiteo",
-  "version": "46.0.0",
-  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v46-wordpress.zip",
+  "version": "47.0.0",
+  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v47-wordpress.zip",
   "homepage": "https://github.com/tanaka38/wp-summiteo",
   "author": "Summiteo",
   "requires": "6.0",
   "tested": "6.8",
   "requires_php": "7.4",
   "last_updated": "2026-05-27",
-  "description": "Plugin métier WP Summiteo pour cloner et adapter des pages WordPress, Elementor et Avia Builder.",
-  "changelog": "<h4>46.0.0</h4><ul><li>WP Summiteo dispose maintenant de son propre menu principal dans l'administration WordPress.</li></ul><h4>45.0.0</h4><ul><li>Ajout du système de mise à jour privée depuis WordPress.</li><li>Ajout du module images Unsplash.</li><li>Amélioration du remplacement Avia.</li></ul>"
+  "description": "Plugin metier WP Summiteo pour cloner et adapter des pages WordPress, Elementor et Avia Builder.",
+  "changelog": "<h4>47.0.0</h4><ul><li>Renforcement du remplacement des images Avia/Enfold.</li><li>Purge des caches de rendu Avia, WordPress, LiteSpeed et Autoptimize apres remplacement d'image.</li><li>Ajout d'un retour de diagnostic listant les images detectees apres remplacement.</li></ul><h4>46.0.0</h4><ul><li>WP Summiteo dispose maintenant de son propre menu principal dans l'administration WordPress.</li></ul><h4>45.0.0</h4><ul><li>Ajout du systeme de mise a jour privee depuis WordPress.</li><li>Ajout du module images Unsplash.</li><li>Amelioration du remplacement Avia.</li></ul>"
 }
