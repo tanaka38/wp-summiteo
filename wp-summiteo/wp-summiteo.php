@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 51.0.0
+ * Version: 52.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '51.0.0';
+    const VERSION = '52.0.0';
     const OPTION = 'wp_summiteo_settings';
     const LEGACY_OPTION = 'goldinfo_ai_connector_settings';
     const NS = 'wp-summiteo/v1';
@@ -313,6 +313,17 @@ jQuery(function($){
       .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur remplacement image'); });
   });
 
+  $('#summiteo-repair-avia-images-btn').on('click', function(e){
+    e.preventDefault();
+    const pageId = $('#image_page_id').val() || $('#ai_page_id').val();
+    if(!pageId){ alert('Indique l\'ID de la page.'); return; }
+    if(!confirm('Réparer les shortcodes image Avia de cette page ?')){ return; }
+    log('Réparation des images Avia en cours...');
+    summiteoRest('/repair-avia-images', {id:pageId})
+      .done(function(resp){ log(resp); })
+      .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur réparation Avia'); });
+  });
+
   $('#summiteo-openai-test-btn').on('click', function(e){
     e.preventDefault();
     log('Test de connexion OpenAI en cours...');
@@ -392,6 +403,7 @@ JS;
                 <div class="summiteo-row"><label>Recherche Unsplash</label><div><input id="unsplash_query" class="regular-text" value="<?php echo esc_attr($s['target_city']); ?> immobilier"> <button type="button" id="summiteo-unsplash-search-btn" class="button">Rechercher des images</button></div></div>
                 <div id="summiteo-unsplash-results" class="summiteo-results"></div>
                 <button type="button" id="summiteo-replace-image-btn" class="button button-secondary">Remplacer l’image sélectionnée</button>
+                <button type="button" id="summiteo-repair-avia-images-btn" class="button">Réparer les images Avia</button>
                 <p class="description">Les images sont importées dans la médiathèque. Les images Avia, Elementor et l’image mise en avant sont prises en charge.</p>
             </div>
 
@@ -454,6 +466,9 @@ JS;
         ]);
         register_rest_route(self::NS, '/replace-image', [
             'methods' => 'POST', 'callback' => [$this, 'rest_replace_image'], 'permission_callback' => [$this, 'can_write']
+        ]);
+        register_rest_route(self::NS, '/repair-avia-images', [
+            'methods' => 'POST', 'callback' => [$this, 'rest_repair_avia_images'], 'permission_callback' => [$this, 'can_write']
         ]);
     }
 
@@ -1021,7 +1036,7 @@ JS;
             $GLOBALS['wp_summiteo_matched_avia_before'] = $m[0];
             $attrs = $this->parse_shortcode_attrs($m[0]);
             $src_value = (string)($attrs['src'] ?? '');
-            $new_src = preg_match('/^\d+$/', $src_value) ? (string)$attachment_id : (string)$url;
+            $new_src = (string)$url;
             $shortcode = $m[0];
             if (array_key_exists('src', $attrs) && $new_src !== '') {
                 $shortcode = $this->replace_shortcode_attr($shortcode, 'src', $new_src);
@@ -1029,6 +1044,7 @@ JS;
             if (array_key_exists('attachment', $attrs)) {
                 $shortcode = $this->replace_shortcode_attr($shortcode, 'attachment', (string)$attachment_id);
             }
+            $shortcode = $this->remove_shortcode_attr($shortcode, 'size');
             if (strpos($shortcode, 'src=') === false && $url) {
                 $shortcode = preg_replace('/\]$/', " src='" . esc_attr($url) . "']", $shortcode);
             }
@@ -1131,6 +1147,66 @@ JS;
             }, $shortcode, 1);
         }
         return preg_replace('/\]$/', ' ' . $attr_name . "='" . $safe_value . "']", $shortcode);
+    }
+
+    private function remove_shortcode_attr($shortcode, $attr) {
+        $quoted_attr = preg_quote((string)$attr, '/');
+        return preg_replace('/\s' . $quoted_attr . '\s*=\s*(["\']).*?\1/is', '', (string)$shortcode, 1);
+    }
+
+    public function rest_repair_avia_images(WP_REST_Request $r) {
+        $p = $r->get_json_params() ?: [];
+        $page_id = absint($p['id'] ?? 0);
+        $post = get_post($page_id);
+        if (!$post) return new WP_Error('summiteo_not_found', 'Page introuvable.', ['status'=>404]);
+
+        $changes = [];
+        $index = 0;
+        $new_content = preg_replace_callback('/\[av_image\b[^\]]*\]/is', function($m) use (&$changes, &$index) {
+            $before = $m[0];
+            $attrs = $this->parse_shortcode_attrs($before);
+            $attachment_id = absint($attrs['attachment'] ?? 0);
+            if (!$attachment_id && !empty($attrs['src']) && preg_match('/^\d+$/', (string)$attrs['src'])) {
+                $attachment_id = absint($attrs['src']);
+            }
+            if (!$attachment_id) {
+                $index++;
+                return $before;
+            }
+            $url = wp_get_attachment_url($attachment_id);
+            if (!$url) {
+                $index++;
+                return $before;
+            }
+            $after = $this->replace_shortcode_attr($before, 'src', $url);
+            $after = $this->replace_shortcode_attr($after, 'attachment', (string)$attachment_id);
+            $after = $this->remove_shortcode_attr($after, 'size');
+            if ($after !== $before) {
+                $changes[] = [
+                    'index' => $index,
+                    'attachment_id' => $attachment_id,
+                    'before' => $before,
+                    'after' => $after,
+                ];
+            }
+            $index++;
+            return $after;
+        }, (string)$post->post_content);
+
+        if ($new_content === (string)$post->post_content) {
+            return ['success'=>true, 'page_id'=>$page_id, 'changed'=>false, 'changes'=>[]];
+        }
+        $result = wp_update_post(['ID'=>$page_id, 'post_content'=>$new_content], true);
+        if (is_wp_error($result)) return $result;
+        clean_post_cache($page_id);
+        $this->purge_page_cache($page_id);
+        return [
+            'success' => true,
+            'page_id' => $page_id,
+            'changed' => true,
+            'count' => count($changes),
+            'changes' => $changes,
+        ];
     }
 
     private function replace_elementor_image($page_id, $element_id, $field, $attachment_id) {
