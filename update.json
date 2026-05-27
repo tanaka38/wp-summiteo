@@ -1,0 +1,13 @@
+{
+  "name": "WP Summiteo",
+  "version": "45.0.0",
+  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v45-wordpress.zip",
+  "homepage": "https://github.com/tanaka38/wp-summiteo",
+  "author": "Summiteo",
+  "requires": "6.0",
+  "tested": "6.8",
+  "requires_php": "7.4",
+  "last_updated": "2026-05-27",
+  "description": "Plugin métier WP Summiteo pour cloner et adapter des pages WordPress, Elementor et Avia Builder.",
+  "changelog": "<h4>45.0.0</h4><ul><li>Ajout du système de mise à jour privée depuis WordPress.</li><li>Ajout du module images Unsplash.</li><li>Amélioration du remplacement Avia.</li></ul>"
+}
