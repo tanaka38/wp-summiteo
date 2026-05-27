@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 50.0.0
+ * Version: 51.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '50.0.0';
+    const VERSION = '51.0.0';
     const OPTION = 'wp_summiteo_settings';
     const LEGACY_OPTION = 'goldinfo_ai_connector_settings';
     const NS = 'wp-summiteo/v1';
@@ -1019,10 +1019,16 @@ JS;
         $new_content = preg_replace_callback('/\[av_image\b[^\]]*\]/is', function($m) use (&$count, $occurrence, $attachment_id, $url) {
             if ($count++ !== $occurrence) return $m[0];
             $GLOBALS['wp_summiteo_matched_avia_before'] = $m[0];
-            $shortcode = $this->replace_shortcode_attr($m[0], 'src', (string)$attachment_id);
-            $shortcode = $this->replace_shortcode_attr($shortcode, 'attachment', (string)$attachment_id);
-            $shortcode = $this->replace_shortcode_attr($shortcode, 'attachment_size', 'full');
-            $shortcode = $this->replace_shortcode_attr($shortcode, 'size', 'full');
+            $attrs = $this->parse_shortcode_attrs($m[0]);
+            $src_value = (string)($attrs['src'] ?? '');
+            $new_src = preg_match('/^\d+$/', $src_value) ? (string)$attachment_id : (string)$url;
+            $shortcode = $m[0];
+            if (array_key_exists('src', $attrs) && $new_src !== '') {
+                $shortcode = $this->replace_shortcode_attr($shortcode, 'src', $new_src);
+            }
+            if (array_key_exists('attachment', $attrs)) {
+                $shortcode = $this->replace_shortcode_attr($shortcode, 'attachment', (string)$attachment_id);
+            }
             if (strpos($shortcode, 'src=') === false && $url) {
                 $shortcode = preg_replace('/\]$/', " src='" . esc_attr($url) . "']", $shortcode);
             }
@@ -1033,23 +1039,14 @@ JS;
         $matched_shortcode_after = (string)($GLOBALS['wp_summiteo_matched_avia_after'] ?? '');
         unset($GLOBALS['wp_summiteo_matched_avia_before'], $GLOBALS['wp_summiteo_matched_avia_after']);
 
-        if ($old_attachment_id && $old_attachment_id !== $attachment_id) {
-            $new_content = str_replace("'" . $old_attachment_id . "'", "'" . $attachment_id . "'", $new_content);
-            $new_content = str_replace('"' . $old_attachment_id . '"', '"' . $attachment_id . '"', $new_content);
-        }
-        if ($old_url && $url && $old_url !== $url) {
-            $new_content = str_replace($old_url, $url, $new_content);
-        }
         $result = wp_update_post(['ID'=>$page_id, 'post_content'=>$new_content], true);
         if (is_wp_error($result)) return $result;
-        $meta_updates = $this->replace_avia_image_in_meta($page_id, $old_attachment_id, $old_url, $attachment_id, $url);
-        $this->clear_avia_render_cache($page_id);
         clean_post_cache($page_id);
         return [
             'type'=>'avia_image',
             'occurrence'=>$occurrence,
             'content_changed'=>($new_content !== (string)$post->post_content),
-            'meta_updates'=>$meta_updates,
+            'meta_updates'=>[],
             'matched_shortcode_before'=>$matched_shortcode_before,
             'matched_shortcode_after'=>$matched_shortcode_after,
         ];

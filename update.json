@@ -1,7 +1,7 @@
 {
   "name": "WP Summiteo",
-  "version": "50.0.0",
-  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v50-wordpress.zip",
+  "version": "51.0.0",
+  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v51-wordpress.zip",
   "homepage": "https://github.com/tanaka38/wp-summiteo",
   "author": "Summiteo",
   "requires": "6.0",
@@ -9,5 +9,5 @@
   "requires_php": "7.4",
   "last_updated": "2026-05-27",
   "description": "Plugin metier WP Summiteo pour cloner et adapter des pages WordPress, Elementor et Avia Builder.",
-  "changelog": "<h4>50.0.0</h4><ul><li>Correction du packaging ZIP pour garantir un chemin interne WordPress standard wp-summiteo/wp-summiteo.php.</li></ul><h4>49.0.0</h4><ul><li>Ajout d'une compatibilite avec l'ancienne URL sous Outils afin d'eviter le message d'autorisation apres mise a jour.</li></ul><h4>48.0.0</h4><ul><li>La verification WordPress des mises a jour force maintenant la lecture du manifeste distant.</li><li>Le cache interne du manifeste passe de 6 heures a 15 minutes.</li></ul><h4>47.0.0</h4><ul><li>Renforcement du remplacement des images Avia/Enfold.</li><li>Purge des caches de rendu Avia, WordPress, LiteSpeed et Autoptimize apres remplacement d'image.</li><li>Ajout d'un retour de diagnostic listant les images detectees apres remplacement.</li></ul><h4>46.0.0</h4><ul><li>WP Summiteo dispose maintenant de son propre menu principal dans l'administration WordPress.</li></ul><h4>45.0.0</h4><ul><li>Ajout du systeme de mise a jour privee depuis WordPress.</li><li>Ajout du module images Unsplash.</li><li>Amelioration du remplacement Avia.</li></ul>"
+  "changelog": "<h4>51.0.0</h4><ul><li>Remplacement d'image Avia rendu conservateur : seul le shortcode image selectionne est modifie.</li><li>Suppression du remplacement large dans les metas Avia afin d'eviter de casser les pages Enfold.</li></ul><h4>50.0.0</h4><ul><li>Correction du packaging ZIP pour garantir un chemin interne WordPress standard wp-summiteo/wp-summiteo.php.</li></ul><h4>49.0.0</h4><ul><li>Ajout d'une compatibilite avec l'ancienne URL sous Outils afin d'eviter le message d'autorisation apres mise a jour.</li></ul><h4>48.0.0</h4><ul><li>La verification WordPress des mises a jour force maintenant la lecture du manifeste distant.</li><li>Le cache interne du manifeste passe de 6 heures a 15 minutes.</li></ul><h4>47.0.0</h4><ul><li>Renforcement du remplacement des images Avia/Enfold.</li><li>Purge des caches de rendu Avia, WordPress, LiteSpeed et Autoptimize apres remplacement d'image.</li><li>Ajout d'un retour de diagnostic listant les images detectees apres remplacement.</li></ul><h4>46.0.0</h4><ul><li>WP Summiteo dispose maintenant de son propre menu principal dans l'administration WordPress.</li></ul><h4>45.0.0</h4><ul><li>Ajout du systeme de mise a jour privee depuis WordPress.</li><li>Ajout du module images Unsplash.</li><li>Amelioration du remplacement Avia.</li></ul>"
 }
