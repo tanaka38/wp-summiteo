@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 52.0.0
+ * Version: 53.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '52.0.0';
+    const VERSION = '53.0.0';
     const OPTION = 'wp_summiteo_settings';
     const LEGACY_OPTION = 'goldinfo_ai_connector_settings';
     const NS = 'wp-summiteo/v1';
@@ -704,6 +704,32 @@ JS;
         }
     }
 
+    private function elementor_meta_keys() {
+        return [
+            '_elementor_data',
+            '_elementor_edit_mode',
+            '_elementor_template_type',
+            '_elementor_version',
+            '_elementor_page_settings',
+            '_elementor_controls_usage',
+            '_elementor_css',
+            '_elementor_page_assets',
+        ];
+    }
+
+    private function is_real_elementor_page($post_id) {
+        $edit_mode = get_post_meta($post_id, '_elementor_edit_mode', true);
+        $data = get_post_meta($post_id, '_elementor_data', true);
+        $json = is_string($data) ? json_decode($data, true) : null;
+        return $edit_mode === 'builder' && is_array($json) && !empty($json);
+    }
+
+    private function cleanup_elementor_meta($post_id) {
+        foreach ($this->elementor_meta_keys() as $key) {
+            delete_post_meta($post_id, $key);
+        }
+    }
+
     public function rest_clone_page(WP_REST_Request $r) { return $this->clone_page_from_params($r->get_json_params() ?: $r->get_params()); }
 
     private function clone_page_from_params($params) {
@@ -725,9 +751,12 @@ JS;
         if (is_wp_error($new_id)) return $new_id;
         wp_update_post(['ID'=>$new_id, 'post_name'=>$new_slug]);
         $all_meta = get_post_meta($source_id);
+        $is_elementor_source = $this->is_real_elementor_page($source_id);
+        $elementor_meta_keys = $this->elementor_meta_keys();
         $skip_meta = ['_edit_lock','_edit_last','_wp_old_slug','_elementor_css','_elementor_page_assets'];
         foreach ($all_meta as $key=>$vals) {
             if (in_array($key, $skip_meta, true)) continue;
+            if (!$is_elementor_source && in_array($key, $elementor_meta_keys, true)) continue;
             delete_post_meta($new_id,$key);
             foreach ($vals as $v) {
                 $maybe = maybe_unserialize($v);
@@ -739,12 +768,16 @@ JS;
                 }
             }
         }
-        update_post_meta($new_id, '_elementor_edit_mode', 'builder');
-        if (!get_post_meta($new_id, '_elementor_template_type', true)) update_post_meta($new_id, '_elementor_template_type', 'wp-page');
+        if ($is_elementor_source) {
+            update_post_meta($new_id, '_elementor_edit_mode', 'builder');
+            if (!get_post_meta($new_id, '_elementor_template_type', true)) update_post_meta($new_id, '_elementor_template_type', 'wp-page');
+        } else {
+            $this->cleanup_elementor_meta($new_id);
+        }
         if ($thumb = get_post_thumbnail_id($source_id)) set_post_thumbnail($new_id, $thumb);
-        $this->regenerate_elementor_for_post($new_id);
+        if ($is_elementor_source) $this->regenerate_elementor_for_post($new_id);
         clean_post_cache($new_id);
-        return ['success'=>true,'source_id'=>$source_id,'new_id'=>$new_id,'title'=>get_the_title($new_id),'slug'=>get_post_field('post_name',$new_id),'status'=>get_post_status($new_id),'url'=>get_permalink($new_id),'edit_url'=>get_edit_post_link($new_id,''),'elementor_url'=>admin_url('post.php?post='.$new_id.'&action=elementor'),'css_regenerated'=>true];
+        return ['success'=>true,'source_id'=>$source_id,'new_id'=>$new_id,'title'=>get_the_title($new_id),'slug'=>get_post_field('post_name',$new_id),'status'=>get_post_status($new_id),'url'=>get_permalink($new_id),'edit_url'=>get_edit_post_link($new_id,''),'elementor_url'=>$is_elementor_source ? admin_url('post.php?post='.$new_id.'&action=elementor') : '','is_elementor'=>$is_elementor_source,'css_regenerated'=>$is_elementor_source];
     }
 
     public function rest_update_block(WP_REST_Request $r) {
