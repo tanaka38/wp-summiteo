@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 62.0.0
+ * Version: 63.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '62.0.0';
+    const VERSION = '63.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -2041,7 +2041,7 @@ JS;
 
     private function call_openai_text($prompt, $settings) {
         $response = wp_remote_post('https://api.openai.com/v1/responses', [
-            'timeout' => 25,
+            'timeout' => 90,
             'headers' => [
                 'Authorization' => 'Bearer ' . $settings['openai_api_key'],
                 'Content-Type' => 'application/json',
@@ -2050,7 +2050,7 @@ JS;
                 'model' => $settings['openai_model'] ?: 'gpt-4.1-mini',
                 'input' => $prompt,
                 'temperature' => 0.1,
-                'max_output_tokens' => 1400,
+                'max_output_tokens' => 6000,
             ]),
         ]);
         if (is_wp_error($response)) return $response;
