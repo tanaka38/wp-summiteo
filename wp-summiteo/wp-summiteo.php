@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 60.0.0
+ * Version: 61.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '60.0.0';
+    const VERSION = '61.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -51,7 +51,6 @@ class WP_Summiteo {
             'ai' => [
                 'selected_ai_page_id' => '',
                 'editorial_brief' => '',
-                'ai_block_limit' => '3',
                 'respect_text_length' => '0',
             ],
             'images' => [
@@ -135,7 +134,6 @@ class WP_Summiteo {
         return [
             'selected_ai_page_id' => isset($input['selected_ai_page_id']) ? (string)absint($input['selected_ai_page_id']) : '',
             'editorial_brief' => isset($input['editorial_brief']) ? wp_kses_post($input['editorial_brief']) : '',
-            'ai_block_limit' => isset($input['ai_block_limit']) ? (string)max(1, min(30, absint($input['ai_block_limit']))) : '3',
             'respect_text_length' => !empty($input['respect_text_length']) ? '1' : '0',
         ];
     }
@@ -290,7 +288,7 @@ jQuery(function($){
     const pageId = $('#ai_page_id').val();
     if(!pageId){ alert('Indique l\'ID de la page ou de l’article à réécrire.'); return; }
     log(apply ? 'Réécriture du contenu et application en cours...' : 'Prévisualisation du contenu en cours...');
-    summiteoRest('/ai-rewrite-page', {id:pageId, limit:$('#ai_limit').val(), apply:apply})
+    summiteoRest('/ai-rewrite-page', {id:pageId, apply:apply})
       .done(function(resp){ log(resp); })
       .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur API'); });
   });
@@ -484,7 +482,6 @@ JS;
                     <?php settings_fields('wp_summiteo_ai_group'); ?>
                     <div class="summiteo-row"><label>Brief éditorial IA</label><textarea class="large-text" rows="8" name="<?php echo self::OPTION_AI; ?>[editorial_brief]" placeholder="Cible, ton, SEO local, contraintes de style, quartiers, CTA, règles HTML..."><?php echo esc_textarea($s['editorial_brief']); ?></textarea></div>
                     <div class="summiteo-row"><label>Contenu IA sélectionné</label><div><input id="ai_page_id" class="small-text" name="<?php echo self::OPTION_AI; ?>[selected_ai_page_id]" value="<?php echo esc_attr($s['selected_ai_page_id']); ?>"> <span id="selected_ai_page_label" class="summiteo-muted"><?php echo esc_html($s['selected_ai_page_id'] ? 'ID '.$s['selected_ai_page_id'] : 'Aucun contenu sélectionné'); ?></span></div></div>
-                    <div class="summiteo-row"><label>Nombre de blocs à traiter</label><input id="ai_limit" class="small-text" name="<?php echo self::OPTION_AI; ?>[ai_block_limit]" value="<?php echo esc_attr($s['ai_block_limit']); ?>"> <span class="description">Limite les blocs envoyés à OpenAI pour tester et maîtriser les coûts.</span></div>
                     <div class="summiteo-row"><label>Respecter la longueur des textes</label><label><input type="checkbox" name="<?php echo self::OPTION_AI; ?>[respect_text_length]" value="1" <?php checked($s['respect_text_length'], '1'); ?>> Appliquer les contrôles de longueur actuels pendant la réécriture</label></div>
                     <?php submit_button('Enregistrer les paramètres IA', 'secondary', 'submit', false); ?>
                 </form>
@@ -1878,7 +1875,7 @@ JS;
     public function rest_ai_rewrite_page(WP_REST_Request $r) {
         $p = $r->get_json_params() ?: [];
         $page_id = absint($p['id'] ?? 0);
-        $limit = isset($p['limit']) ? max(1, min(30, absint($p['limit']))) : absint(self::settings()['ai_block_limit']);
+        $limit = isset($p['limit']) ? max(1, min(30, absint($p['limit']))) : 30;
         $apply = !empty($p['apply']);
         $post = get_post($page_id);
         if (!$post) return new WP_Error('summiteo_not_found', 'Page introuvable.', ['status'=>404]);
