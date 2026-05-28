@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 53.0.0
+ * Version: 54.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '53.0.0';
+    const VERSION = '54.0.0';
     const OPTION = 'wp_summiteo_settings';
     const LEGACY_OPTION = 'goldinfo_ai_connector_settings';
     const NS = 'wp-summiteo/v1';
@@ -324,6 +324,16 @@ jQuery(function($){
       .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur réparation Avia'); });
   });
 
+  $('#summiteo-sync-avia-editor-btn').on('click', function(e){
+    e.preventDefault();
+    const pageId = $('#image_page_id').val() || $('#ai_page_id').val();
+    if(!pageId){ alert('Indique l\'ID de la page.'); return; }
+    log('Synchronisation de l’éditeur Avia en cours...');
+    summiteoRest('/sync-avia-editor-images', {id:pageId})
+      .done(function(resp){ log(resp); })
+      .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur synchronisation Avia'); });
+  });
+
   $('#summiteo-openai-test-btn').on('click', function(e){
     e.preventDefault();
     log('Test de connexion OpenAI en cours...');
@@ -404,6 +414,7 @@ JS;
                 <div id="summiteo-unsplash-results" class="summiteo-results"></div>
                 <button type="button" id="summiteo-replace-image-btn" class="button button-secondary">Remplacer l’image sélectionnée</button>
                 <button type="button" id="summiteo-repair-avia-images-btn" class="button">Réparer les images Avia</button>
+                <button type="button" id="summiteo-sync-avia-editor-btn" class="button">Synchroniser l’éditeur Avia</button>
                 <p class="description">Les images sont importées dans la médiathèque. Les images Avia, Elementor et l’image mise en avant sont prises en charge.</p>
             </div>
 
@@ -469,6 +480,9 @@ JS;
         ]);
         register_rest_route(self::NS, '/repair-avia-images', [
             'methods' => 'POST', 'callback' => [$this, 'rest_repair_avia_images'], 'permission_callback' => [$this, 'can_write']
+        ]);
+        register_rest_route(self::NS, '/sync-avia-editor-images', [
+            'methods' => 'POST', 'callback' => [$this, 'rest_sync_avia_editor_images'], 'permission_callback' => [$this, 'can_write']
         ]);
     }
 
@@ -1090,12 +1104,13 @@ JS;
 
         $result = wp_update_post(['ID'=>$page_id, 'post_content'=>$new_content], true);
         if (is_wp_error($result)) return $result;
+        $meta_updates = $this->sync_avia_editor_image_shortcodes($page_id, $new_content);
         clean_post_cache($page_id);
         return [
             'type'=>'avia_image',
             'occurrence'=>$occurrence,
             'content_changed'=>($new_content !== (string)$post->post_content),
-            'meta_updates'=>[],
+            'meta_updates'=>$meta_updates,
             'matched_shortcode_before'=>$matched_shortcode_before,
             'matched_shortcode_after'=>$matched_shortcode_after,
         ];
@@ -1231,6 +1246,7 @@ JS;
         }
         $result = wp_update_post(['ID'=>$page_id, 'post_content'=>$new_content], true);
         if (is_wp_error($result)) return $result;
+        $meta_updates = $this->sync_avia_editor_image_shortcodes($page_id, $new_content);
         clean_post_cache($page_id);
         $this->purge_page_cache($page_id);
         return [
@@ -1238,8 +1254,82 @@ JS;
             'page_id' => $page_id,
             'changed' => true,
             'count' => count($changes),
+            'meta_updates' => $meta_updates,
             'changes' => $changes,
         ];
+    }
+
+    public function rest_sync_avia_editor_images(WP_REST_Request $r) {
+        $p = $r->get_json_params() ?: [];
+        $page_id = absint($p['id'] ?? 0);
+        $post = get_post($page_id);
+        if (!$post) return new WP_Error('summiteo_not_found', 'Page introuvable.', ['status'=>404]);
+        $meta_updates = $this->sync_avia_editor_image_shortcodes($page_id, (string)$post->post_content);
+        clean_post_cache($page_id);
+        return [
+            'success' => true,
+            'page_id' => $page_id,
+            'meta_updates' => $meta_updates,
+        ];
+    }
+
+    private function sync_avia_editor_image_shortcodes($page_id, $source_content) {
+        $source_shortcodes = $this->avia_image_shortcodes((string)$source_content);
+        if (empty($source_shortcodes)) return [];
+
+        $updated = [];
+        foreach (['_aviaLayoutBuilderCleanData', '_avia_builder_shortcode_tree', '_avia_builder_shortcode_tree_unfiltered', '_avia_builder_precompile'] as $key) {
+            $values = get_post_meta($page_id, $key);
+            if (empty($values)) continue;
+            $new_values = [];
+            $key_changed = false;
+            foreach ($values as $raw_value) {
+                $value = maybe_unserialize($raw_value);
+                $changed = false;
+                $new_values[] = $this->sync_avia_image_shortcodes_deep($value, $source_shortcodes, $changed);
+                if ($changed) $key_changed = true;
+            }
+            if ($key_changed) {
+                delete_post_meta($page_id, $key);
+                foreach ($new_values as $new_value) {
+                    add_post_meta($page_id, $key, $new_value);
+                }
+                $updated[] = $key;
+            }
+        }
+        return $updated;
+    }
+
+    private function sync_avia_image_shortcodes_deep($value, $source_shortcodes, &$changed = false) {
+        if (is_array($value)) {
+            foreach ($value as $k => $v) {
+                $value[$k] = $this->sync_avia_image_shortcodes_deep($v, $source_shortcodes, $changed);
+            }
+            return $value;
+        }
+        if (is_object($value)) {
+            foreach ($value as $k => $v) {
+                $value->$k = $this->sync_avia_image_shortcodes_deep($v, $source_shortcodes, $changed);
+            }
+            return $value;
+        }
+        if (!is_string($value) || strpos($value, '[av_image') === false) return $value;
+        $local_shortcodes = $this->avia_image_shortcodes($value);
+        if (empty($local_shortcodes) || count($local_shortcodes) !== count($source_shortcodes)) return $value;
+        $index = 0;
+        $new_value = preg_replace_callback('/\[av_image\b[^\]]*\]/is', function($m) use (&$index, $source_shortcodes) {
+            return $source_shortcodes[$index++] ?? $m[0];
+        }, $value);
+        if ($new_value !== $value) {
+            $changed = true;
+            return $new_value;
+        }
+        return $value;
+    }
+
+    private function avia_image_shortcodes($content) {
+        if (!preg_match_all('/\[av_image\b[^\]]*\]/is', (string)$content, $matches)) return [];
+        return $matches[0];
     }
 
     private function replace_elementor_image($page_id, $element_id, $field, $attachment_id) {
