@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 57.0.0
+ * Version: 58.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '57.0.0';
+    const VERSION = '58.0.0';
     const OPTION = 'wp_summiteo_settings';
     const LEGACY_OPTION = 'goldinfo_ai_connector_settings';
     const NS = 'wp-summiteo/v1';
@@ -366,42 +366,34 @@ JS;
         <div class="wrap">
                 <h1>WP Summiteo <span class="summiteo-pill">v<?php echo esc_html(self::VERSION); ?></span></h1>
             <div class="summiteo-tabs" role="tablist" aria-label="Fonctions WP Summiteo">
-                <button type="button" class="summiteo-tab is-active" data-tab="settings" role="tab" aria-selected="true">Réglages</button>
+                <button type="button" class="summiteo-tab is-active" data-tab="dashboard" role="tab" aria-selected="true">Tableau de bord</button>
                 <button type="button" class="summiteo-tab" data-tab="clone" role="tab" aria-selected="false">Clonage</button>
                 <button type="button" class="summiteo-tab" data-tab="rewrite" role="tab" aria-selected="false">Réécriture IA</button>
                 <button type="button" class="summiteo-tab" data-tab="images" role="tab" aria-selected="false">Images</button>
+                <button type="button" class="summiteo-tab" data-tab="settings" role="tab" aria-selected="false">Réglages</button>
             </div>
 
-            <div id="summiteo-tab-settings" class="summiteo-tab-panel is-active" role="tabpanel">
+            <div id="summiteo-tab-dashboard" class="summiteo-tab-panel is-active" role="tabpanel">
             <div class="summiteo-card">
-                <h2>Réglages</h2>
-                <form method="post" action="options.php">
-                    <?php settings_fields('wp_summiteo_group'); ?>
-                    <div class="summiteo-row"><label>Ville source</label><input class="regular-text" name="<?php echo self::OPTION; ?>[source_city]" value="<?php echo esc_attr($s['source_city']); ?>"></div>
-                    <div class="summiteo-row"><label>Ville destination</label><input id="target_city" class="regular-text" name="<?php echo self::OPTION; ?>[target_city]" value="<?php echo esc_attr($s['target_city']); ?>"></div>
-                    <div class="summiteo-row"><label>Département destination</label><input class="regular-text" name="<?php echo self::OPTION; ?>[target_department]" value="<?php echo esc_attr($s['target_department']); ?>"></div>
-                    <div class="summiteo-row"><label>Page source sélectionnée</label><div><input id="selected_source_id" class="small-text" name="<?php echo self::OPTION; ?>[selected_source_id]" value="<?php echo esc_attr($s['selected_source_id']); ?>"> <span id="selected_source_label" class="summiteo-muted"><?php echo esc_html($s['selected_source_id'] ? 'ID '.$s['selected_source_id'] : 'Aucune source sélectionnée'); ?></span></div></div>
-                    <div class="summiteo-row"><label>Remplacements</label><textarea class="large-text" rows="10" name="<?php echo self::OPTION; ?>[replacements]"><?php echo esc_textarea($s['replacements']); ?></textarea><p class="description">Format : source|destination, une règle par ligne. Le remplacement Ville source → Ville destination est ajouté automatiquement, y compris en format slug.</p></div>
-                    <div class="summiteo-row"><label>SEO title modèle</label><input class="large-text" name="<?php echo self::OPTION; ?>[seo_title_tpl]" value="<?php echo esc_attr($s['seo_title_tpl']); ?>"></div>
-                    <div class="summiteo-row"><label>SEO description modèle</label><textarea class="large-text" rows="3" name="<?php echo self::OPTION; ?>[seo_desc_tpl]"><?php echo esc_textarea($s['seo_desc_tpl']); ?></textarea></div>
-                    <div class="summiteo-row"><label>Brief éditorial IA</label><textarea class="large-text" rows="8" name="<?php echo self::OPTION; ?>[editorial_brief]" placeholder="Cible, ton, SEO local, contraintes de style, quartiers, CTA, règles HTML..."><?php echo esc_textarea($s['editorial_brief']); ?></textarea></div>
-                    <div class="summiteo-row"><label>Activer OpenAI</label><label><input type="checkbox" name="<?php echo self::OPTION; ?>[openai_enabled]" value="1" <?php checked($s['openai_enabled'], '1'); ?>> Autoriser la prévisualisation et la réécriture IA</label></div>
-                    <div class="summiteo-row"><label>Clé API OpenAI</label><input class="large-text" type="password" name="<?php echo self::OPTION; ?>[openai_api_key]" value="<?php echo esc_attr($s['openai_api_key']); ?>" autocomplete="off"></div>
-                    <div class="summiteo-row"><label>Modèle OpenAI</label><input class="regular-text" name="<?php echo self::OPTION; ?>[openai_model]" value="<?php echo esc_attr($s['openai_model']); ?>"></div>
-                    <div class="summiteo-row"><label>Connexion OpenAI</label><div><button id="summiteo-openai-test-btn" class="button" type="button">Tester la connexion API</button> <span class="description">Enregistre la clé avant de lancer le test.</span></div></div>
-                    <div class="summiteo-row"><label>Clé API Unsplash</label><input class="large-text" type="password" name="<?php echo self::OPTION; ?>[unsplash_access_key]" value="<?php echo esc_attr($s['unsplash_access_key']); ?>" autocomplete="off"></div>
-                    <div class="summiteo-row"><label>URL manifeste mise à jour</label><div><input class="large-text" name="<?php echo self::OPTION; ?>[update_manifest_url]" value="<?php echo esc_attr($s['update_manifest_url']); ?>" placeholder="https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json"><p class="description">URL utilisée par WordPress pour proposer les mises à jour automatiques du plugin.</p></div></div>
-                    <input type="hidden" name="<?php echo self::OPTION; ?>[ai_block_limit]" value="<?php echo esc_attr($s['ai_block_limit']); ?>">
-                    <?php submit_button('Enregistrer les réglages'); ?>
-                </form>
+                <h2>Tableau de bord</h2>
             </div>
             </div>
 
             <div id="summiteo-tab-clone" class="summiteo-tab-panel" role="tabpanel">
             <div class="summiteo-card">
+                <h2>Paramètres de clonage</h2>
+                <div class="summiteo-row"><label>Ville source</label><input form="wp-summiteo-settings-form" class="regular-text" name="<?php echo self::OPTION; ?>[source_city]" value="<?php echo esc_attr($s['source_city']); ?>"></div>
+                <div class="summiteo-row"><label>Ville destination</label><input form="wp-summiteo-settings-form" id="target_city" class="regular-text" name="<?php echo self::OPTION; ?>[target_city]" value="<?php echo esc_attr($s['target_city']); ?>"></div>
+                <div class="summiteo-row"><label>Département destination</label><input form="wp-summiteo-settings-form" class="regular-text" name="<?php echo self::OPTION; ?>[target_department]" value="<?php echo esc_attr($s['target_department']); ?>"></div>
+                <div class="summiteo-row"><label>Page source sélectionnée</label><div><input form="wp-summiteo-settings-form" id="selected_source_id" class="small-text" name="<?php echo self::OPTION; ?>[selected_source_id]" value="<?php echo esc_attr($s['selected_source_id']); ?>"> <span id="selected_source_label" class="summiteo-muted"><?php echo esc_html($s['selected_source_id'] ? 'ID '.$s['selected_source_id'] : 'Aucune source sélectionnée'); ?></span></div></div>
+                <div class="summiteo-row"><label>Remplacements</label><textarea form="wp-summiteo-settings-form" class="large-text" rows="10" name="<?php echo self::OPTION; ?>[replacements]"><?php echo esc_textarea($s['replacements']); ?></textarea><p class="description">Format : source|destination, une règle par ligne. Le remplacement Ville source → Ville destination est ajouté automatiquement, y compris en format slug.</p></div>
+                <button type="submit" form="wp-summiteo-settings-form" class="button button-secondary">Enregistrer les paramètres de clonage</button>
+            </div>
+
+            <div class="summiteo-card">
                 <h2>Sélectionner une page source</h2>
                 <p>Recherche une page source, par exemple <strong>La Rochelle</strong>, puis clique sur <strong>Utiliser comme source</strong>.</p>
-                <input id="summiteo-source-search" class="regular-text" value="<?php echo esc_attr($s['source_city']); ?>"> <button id="summiteo-search-btn" class="button">Rechercher</button>
+                <input id="summiteo-source-search" class="regular-text" value="<?php echo esc_attr($s['source_city']); ?>"> <button type="button" id="summiteo-search-btn" class="button">Rechercher</button>
                 <div id="summiteo-results" class="summiteo-results"></div>
             </div>
 
@@ -410,7 +402,7 @@ JS;
                 <div class="summiteo-row"><label>Nouveau titre</label><input id="new_title" class="large-text" value="<?php echo esc_attr($default_new_title); ?>" placeholder="Sélectionne une page source pour générer le titre"></div>
                 <div class="summiteo-row"><label>Nouveau slug</label><input id="new_slug" class="regular-text" value="<?php echo esc_attr($default_new_slug); ?>" placeholder="Sélectionne une page source pour générer le slug"></div>
                 <div class="summiteo-row"><label>Statut</label><select id="new_status"><option value="draft">Brouillon</option><option value="pending">En attente</option><?php if (current_user_can('publish_pages')) echo '<option value="publish">Publié</option>'; ?></select></div>
-                <button id="summiteo-clone-admin-btn" class="button button-primary">Cloner avec titre et slug adaptés</button>
+                <button type="button" id="summiteo-clone-admin-btn" class="button button-primary">Cloner avec titre et slug adaptés</button>
                 <p class="description">Le clonage applique les remplacements au titre et au slug uniquement. Le contenu de la page est conservé tel quel.</p>
             </div>
             </div>
@@ -419,13 +411,15 @@ JS;
             <div class="summiteo-card">
                 <h2>Réécriture IA séparée</h2>
                 <p>Cette étape ne modifie pas le clonage Elementor. Sélectionne une page ou un article à réécrire, puis lance une prévisualisation avant application.</p>
-                <div class="summiteo-row"><label>Rechercher une page ou un article</label><div><input id="summiteo-ai-page-search" class="regular-text" value="<?php echo esc_attr($s['target_city']); ?>"> <button id="summiteo-ai-search-btn" class="button">Rechercher</button></div></div>
+                <div class="summiteo-row"><label>Brief éditorial IA</label><textarea form="wp-summiteo-settings-form" class="large-text" rows="8" name="<?php echo self::OPTION; ?>[editorial_brief]" placeholder="Cible, ton, SEO local, contraintes de style, quartiers, CTA, règles HTML..."><?php echo esc_textarea($s['editorial_brief']); ?></textarea></div>
+                <button type="submit" form="wp-summiteo-settings-form" class="button button-secondary">Enregistrer le brief éditorial</button>
+                <div class="summiteo-row"><label>Rechercher une page ou un article</label><div><input id="summiteo-ai-page-search" class="regular-text" value="<?php echo esc_attr($s['target_city']); ?>"> <button type="button" id="summiteo-ai-search-btn" class="button">Rechercher</button></div></div>
                 <div id="summiteo-ai-results" class="summiteo-results"></div>
                 <div class="summiteo-row"><label>Contenu IA sélectionné</label><div><input id="ai_page_id" class="small-text" value="<?php echo esc_attr($s['selected_ai_page_id']); ?>"> <span id="selected_ai_page_label" class="summiteo-muted"><?php echo esc_html($s['selected_ai_page_id'] ? 'ID '.$s['selected_ai_page_id'] : 'Aucun contenu sélectionné'); ?></span></div></div>
                 <div class="summiteo-row"><label>Nombre de blocs à traiter</label><input id="ai_limit" class="small-text" value="<?php echo esc_attr($s['ai_block_limit']); ?>"> <span class="description">Limite les blocs envoyés à OpenAI pour tester et maîtriser les coûts.</span></div>
-                <button id="summiteo-detect-blocks-btn" class="button">Afficher les blocs détectés</button>
-                <button id="summiteo-ai-preview-btn" class="button">Prévisualiser la réécriture IA</button>
-                <button id="summiteo-ai-apply-btn" class="button button-secondary">Appliquer la réécriture IA au brouillon</button>
+                <button type="button" id="summiteo-detect-blocks-btn" class="button">Afficher les blocs détectés</button>
+                <button type="button" id="summiteo-ai-preview-btn" class="button">Prévisualiser la réécriture IA</button>
+                <button type="button" id="summiteo-ai-apply-btn" class="button button-secondary">Appliquer la réécriture IA au brouillon</button>
                 <p class="description">Commencer avec 2 ou 3 blocs, puis vérifier dans Elementor avant de traiter davantage de contenu.</p>
             </div>
             </div>
@@ -442,6 +436,25 @@ JS;
                 <button type="button" id="summiteo-repair-avia-images-btn" class="button">Réparer les images Avia</button>
                 <button type="button" id="summiteo-sync-avia-editor-btn" class="button">Synchroniser l’éditeur Avia</button>
                 <p class="description">Les images sont importées dans la médiathèque. Les images Avia, Elementor et l’image mise en avant sont prises en charge.</p>
+            </div>
+            </div>
+
+            <div id="summiteo-tab-settings" class="summiteo-tab-panel" role="tabpanel">
+            <div class="summiteo-card">
+                <h2>Réglages</h2>
+                <form id="wp-summiteo-settings-form" method="post" action="options.php">
+                    <?php settings_fields('wp_summiteo_group'); ?>
+                    <div class="summiteo-row"><label>SEO title modèle</label><input class="large-text" name="<?php echo self::OPTION; ?>[seo_title_tpl]" value="<?php echo esc_attr($s['seo_title_tpl']); ?>"></div>
+                    <div class="summiteo-row"><label>SEO description modèle</label><textarea class="large-text" rows="3" name="<?php echo self::OPTION; ?>[seo_desc_tpl]"><?php echo esc_textarea($s['seo_desc_tpl']); ?></textarea></div>
+                    <div class="summiteo-row"><label>Activer OpenAI</label><label><input type="checkbox" name="<?php echo self::OPTION; ?>[openai_enabled]" value="1" <?php checked($s['openai_enabled'], '1'); ?>> Autoriser la prévisualisation et la réécriture IA</label></div>
+                    <div class="summiteo-row"><label>Clé API OpenAI</label><input class="large-text" type="password" name="<?php echo self::OPTION; ?>[openai_api_key]" value="<?php echo esc_attr($s['openai_api_key']); ?>" autocomplete="off"></div>
+                    <div class="summiteo-row"><label>Modèle OpenAI</label><input class="regular-text" name="<?php echo self::OPTION; ?>[openai_model]" value="<?php echo esc_attr($s['openai_model']); ?>"></div>
+                    <div class="summiteo-row"><label>Connexion OpenAI</label><div><button id="summiteo-openai-test-btn" class="button" type="button">Tester la connexion API</button> <span class="description">Enregistre la clé avant de lancer le test.</span></div></div>
+                    <div class="summiteo-row"><label>Clé API Unsplash</label><input class="large-text" type="password" name="<?php echo self::OPTION; ?>[unsplash_access_key]" value="<?php echo esc_attr($s['unsplash_access_key']); ?>" autocomplete="off"></div>
+                    <div class="summiteo-row"><label>URL manifeste mise à jour</label><div><input class="large-text" name="<?php echo self::OPTION; ?>[update_manifest_url]" value="<?php echo esc_attr($s['update_manifest_url']); ?>" placeholder="https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json"><p class="description">URL utilisée par WordPress pour proposer les mises à jour automatiques du plugin.</p></div></div>
+                    <input type="hidden" name="<?php echo self::OPTION; ?>[ai_block_limit]" value="<?php echo esc_attr($s['ai_block_limit']); ?>">
+                    <?php submit_button('Enregistrer les réglages'); ?>
+                </form>
             </div>
             </div>
 
