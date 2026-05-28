@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 55.0.0
+ * Version: 56.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '55.0.0';
+    const VERSION = '56.0.0';
     const OPTION = 'wp_summiteo_settings';
     const LEGACY_OPTION = 'goldinfo_ai_connector_settings';
     const NS = 'wp-summiteo/v1';
@@ -186,7 +186,7 @@ jQuery(function($){
   $(document).on('click','.summiteo-use-ai-page', function(){
     const id=$(this).data('id'), title=$(this).data('title'), slug=$(this).data('slug');
     $('#ai_page_id').val(id);
-    $('#selected_ai_page_label').text('Page IA sélectionnée : ID '+id+' · '+title+' · /'+slug+'/');
+    $('#selected_ai_page_label').text('Contenu IA sélectionné : ID '+id+' · '+title+' · /'+slug+'/');
   });
 
   $('#summiteo-clone-admin-btn').on('click', function(e){
@@ -202,7 +202,7 @@ jQuery(function($){
       status:$('#new_status').val()
     }, function(resp){
       log(resp);
-      if(resp && resp.success && resp.data && resp.data.new_id){ $('#ai_page_id').val(resp.data.new_id); $('#selected_ai_page_label').text('Page IA sélectionnée : ID '+resp.data.new_id+' · '+(resp.data.title || 'brouillon cloné')); }
+      if(resp && resp.success && resp.data && resp.data.new_id){ $('#ai_page_id').val(resp.data.new_id); $('#selected_ai_page_label').text('Contenu IA sélectionné : ID '+resp.data.new_id+' · '+(resp.data.title || 'brouillon cloné')); }
     });
   });
 
@@ -220,7 +220,7 @@ jQuery(function($){
     e.preventDefault();
     const apply = this.id === 'summiteo-ai-apply-btn';
     const pageId = $('#ai_page_id').val();
-    if(!pageId){ alert('Indique l\'ID de la page à réécrire.'); return; }
+    if(!pageId){ alert('Indique l\'ID de la page ou de l’article à réécrire.'); return; }
     log(apply ? 'Réécriture IA et application en cours...' : 'Prévisualisation IA en cours...');
     summiteoRest('/ai-rewrite-page', {id:pageId, limit:$('#ai_limit').val(), apply:apply})
       .done(function(resp){ log(resp); })
@@ -230,7 +230,7 @@ jQuery(function($){
   $('#summiteo-detect-blocks-btn').on('click', function(e){
     e.preventDefault();
     const pageId = $('#ai_page_id').val();
-    if(!pageId){ alert('Indique l\'ID de la page à analyser.'); return; }
+    if(!pageId){ alert('Indique l\'ID de la page ou de l’article à analyser.'); return; }
     log('Détection des blocs en cours...');
     summiteoRest('/detect-blocks', {id:pageId})
       .done(function(resp){ log(resp); })
@@ -410,10 +410,10 @@ JS;
             <div id="summiteo-tab-rewrite" class="summiteo-tab-panel" role="tabpanel">
             <div class="summiteo-card">
                 <h2>Réécriture IA séparée</h2>
-                <p>Cette étape ne modifie pas le clonage Elementor. Sélectionne la page brouillon à réécrire, puis lance une prévisualisation avant application.</p>
-                <div class="summiteo-row"><label>Rechercher une page à réécrire</label><div><input id="summiteo-ai-page-search" class="regular-text" value="<?php echo esc_attr($s['target_city']); ?>"> <button id="summiteo-ai-search-btn" class="button">Rechercher</button></div></div>
+                <p>Cette étape ne modifie pas le clonage Elementor. Sélectionne une page ou un article à réécrire, puis lance une prévisualisation avant application.</p>
+                <div class="summiteo-row"><label>Rechercher une page ou un article</label><div><input id="summiteo-ai-page-search" class="regular-text" value="<?php echo esc_attr($s['target_city']); ?>"> <button id="summiteo-ai-search-btn" class="button">Rechercher</button></div></div>
                 <div id="summiteo-ai-results" class="summiteo-results"></div>
-                <div class="summiteo-row"><label>Page IA sélectionnée</label><div><input id="ai_page_id" class="small-text" value="<?php echo esc_attr($s['selected_ai_page_id']); ?>"> <span id="selected_ai_page_label" class="summiteo-muted"><?php echo esc_html($s['selected_ai_page_id'] ? 'ID '.$s['selected_ai_page_id'] : 'Aucune page sélectionnée'); ?></span></div></div>
+                <div class="summiteo-row"><label>Contenu IA sélectionné</label><div><input id="ai_page_id" class="small-text" value="<?php echo esc_attr($s['selected_ai_page_id']); ?>"> <span id="selected_ai_page_label" class="summiteo-muted"><?php echo esc_html($s['selected_ai_page_id'] ? 'ID '.$s['selected_ai_page_id'] : 'Aucun contenu sélectionné'); ?></span></div></div>
                 <div class="summiteo-row"><label>Nombre de blocs à traiter</label><input id="ai_limit" class="small-text" value="<?php echo esc_attr($s['ai_block_limit']); ?>"> <span class="description">Limite les blocs envoyés à OpenAI pour tester et maîtriser les coûts.</span></div>
                 <button id="summiteo-detect-blocks-btn" class="button">Afficher les blocs détectés</button>
                 <button id="summiteo-ai-preview-btn" class="button">Prévisualiser la réécriture IA</button>
@@ -426,7 +426,7 @@ JS;
             <div class="summiteo-card">
                 <h2>Images libres de droits</h2>
                 <p>Détecte les images de la page, recherche des alternatives Unsplash, puis remplace uniquement l’image choisie après validation.</p>
-                <div class="summiteo-row"><label>Page à analyser</label><div><input id="image_page_id" class="small-text" value="<?php echo esc_attr($s['selected_ai_page_id']); ?>"> <button type="button" id="summiteo-detect-images-btn" class="button">Afficher les images détectées</button></div></div>
+                <div class="summiteo-row"><label>Page ou article à analyser</label><div><input id="image_page_id" class="small-text" value="<?php echo esc_attr($s['selected_ai_page_id']); ?>"> <button type="button" id="summiteo-detect-images-btn" class="button">Afficher les images détectées</button></div></div>
                 <div id="summiteo-image-results" class="summiteo-results"></div>
                 <div class="summiteo-row"><label>Recherche Unsplash</label><div><input id="unsplash_query" class="regular-text" value="<?php echo esc_attr($s['target_city']); ?> immobilier"> <button type="button" id="summiteo-unsplash-search-btn" class="button">Rechercher des images</button></div></div>
                 <div id="summiteo-unsplash-results" class="summiteo-results"></div>
@@ -507,7 +507,7 @@ JS;
 
     public function can_read() {
         if (!is_user_logged_in()) return new WP_Error('summiteo_not_logged_in', 'Authentification requise.', ['status'=>401]);
-        if (!current_user_can('edit_pages')) return new WP_Error('summiteo_forbidden_cap', 'Droits insuffisants.', ['status'=>403]);
+        if (!current_user_can('edit_pages') && !current_user_can('edit_posts')) return new WP_Error('summiteo_forbidden_cap', 'Droits insuffisants.', ['status'=>403]);
         return true;
     }
 
@@ -649,7 +649,7 @@ JS;
         if (!is_array($json)) {
             $post = get_post($id);
             if (!$post || mb_strlen($this->visible_text((string)$post->post_content)) < 45) {
-                return new WP_Error('summiteo_no_rewritable_content','Aucun contenu Elementor ou classique suffisamment long à extraire.',['status'=>400]);
+                return new WP_Error('summiteo_no_rewritable_content','Aucun contenu Elementor, article ou page classique suffisamment long à extraire.',['status'=>400]);
             }
             $blocks = [];
             foreach ($this->classic_content_parts((string)$post->post_content) as $i => $part) {
@@ -1811,7 +1811,7 @@ JS;
             $mode = $this->is_avia_content((string)$post->post_content) ? 'avia' : 'classic';
             $content = (string)$post->post_content;
             if (mb_strlen($this->visible_text($content)) < 45) {
-                return new WP_Error('summiteo_no_rewritable_content', 'Aucun contenu classique suffisamment long à réécrire.', ['status'=>400]);
+                return new WP_Error('summiteo_no_rewritable_content', 'Aucun contenu de page ou d’article suffisamment long à réécrire.', ['status'=>400]);
             }
             $classic_parts = $this->classic_content_parts($content);
             $candidates = [];
@@ -2111,7 +2111,7 @@ JS;
 
     public function ajax_search_pages() {
         check_ajax_referer('wp_summiteo_admin','nonce');
-        if (!current_user_can('edit_pages')) wp_send_json_error('Droits insuffisants');
+        if (!current_user_can('edit_pages') && !current_user_can('edit_posts')) wp_send_json_error('Droits insuffisants');
         $search=sanitize_text_field($_POST['search']??'');
         wp_send_json_success(['items'=>$this->find_pages($search)]);
     }
