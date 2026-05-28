@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 56.0.0
+ * Version: 57.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '56.0.0';
+    const VERSION = '57.0.0';
     const OPTION = 'wp_summiteo_settings';
     const LEGACY_OPTION = 'goldinfo_ai_connector_settings';
     const NS = 'wp-summiteo/v1';
@@ -40,7 +40,7 @@ class WP_Summiteo {
             'openai_api_key' => '',
             'openai_model' => 'gpt-4.1-mini',
             'unsplash_access_key' => '',
-            'update_manifest_url' => '',
+            'update_manifest_url' => 'https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json',
             'ai_block_limit' => '3',
         ];
     }
@@ -56,7 +56,12 @@ class WP_Summiteo {
                 $settings = [];
             }
         }
-        return wp_parse_args($settings, self::defaults());
+        $settings = wp_parse_args($settings, self::defaults());
+        if (empty($settings['update_manifest_url'])) {
+            $settings['update_manifest_url'] = self::defaults()['update_manifest_url'];
+            update_option(self::OPTION, $settings, false);
+        }
+        return $settings;
     }
 
     public function admin_menu() {
@@ -360,8 +365,16 @@ JS;
         ?>
         <div class="wrap">
                 <h1>WP Summiteo <span class="summiteo-pill">v<?php echo esc_html(self::VERSION); ?></span></h1>
+            <div class="summiteo-tabs" role="tablist" aria-label="Fonctions WP Summiteo">
+                <button type="button" class="summiteo-tab is-active" data-tab="settings" role="tab" aria-selected="true">Réglages</button>
+                <button type="button" class="summiteo-tab" data-tab="clone" role="tab" aria-selected="false">Clonage</button>
+                <button type="button" class="summiteo-tab" data-tab="rewrite" role="tab" aria-selected="false">Réécriture IA</button>
+                <button type="button" class="summiteo-tab" data-tab="images" role="tab" aria-selected="false">Images</button>
+            </div>
+
+            <div id="summiteo-tab-settings" class="summiteo-tab-panel is-active" role="tabpanel">
             <div class="summiteo-card">
-                <h2>Configuration générale</h2>
+                <h2>Réglages</h2>
                 <form method="post" action="options.php">
                     <?php settings_fields('wp_summiteo_group'); ?>
                     <div class="summiteo-row"><label>Ville source</label><input class="regular-text" name="<?php echo self::OPTION; ?>[source_city]" value="<?php echo esc_attr($s['source_city']); ?>"></div>
@@ -377,19 +390,14 @@ JS;
                     <div class="summiteo-row"><label>Modèle OpenAI</label><input class="regular-text" name="<?php echo self::OPTION; ?>[openai_model]" value="<?php echo esc_attr($s['openai_model']); ?>"></div>
                     <div class="summiteo-row"><label>Connexion OpenAI</label><div><button id="summiteo-openai-test-btn" class="button" type="button">Tester la connexion API</button> <span class="description">Enregistre la clé avant de lancer le test.</span></div></div>
                     <div class="summiteo-row"><label>Clé API Unsplash</label><input class="large-text" type="password" name="<?php echo self::OPTION; ?>[unsplash_access_key]" value="<?php echo esc_attr($s['unsplash_access_key']); ?>" autocomplete="off"></div>
-                    <div class="summiteo-row"><label>URL manifeste mise à jour</label><div><input class="large-text" name="<?php echo self::OPTION; ?>[update_manifest_url]" value="<?php echo esc_attr($s['update_manifest_url']); ?>" placeholder="https://exemple.fr/wp-summiteo/update.json"><p class="description">JSON privé utilisé par WordPress pour proposer les mises à jour automatiques du plugin.</p></div></div>
+                    <div class="summiteo-row"><label>URL manifeste mise à jour</label><div><input class="large-text" name="<?php echo self::OPTION; ?>[update_manifest_url]" value="<?php echo esc_attr($s['update_manifest_url']); ?>" placeholder="https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json"><p class="description">URL utilisée par WordPress pour proposer les mises à jour automatiques du plugin.</p></div></div>
                     <input type="hidden" name="<?php echo self::OPTION; ?>[ai_block_limit]" value="<?php echo esc_attr($s['ai_block_limit']); ?>">
-                    <?php submit_button('Enregistrer la configuration'); ?>
+                    <?php submit_button('Enregistrer les réglages'); ?>
                 </form>
             </div>
-
-            <div class="summiteo-tabs" role="tablist" aria-label="Fonctions WP Summiteo">
-                <button type="button" class="summiteo-tab is-active" data-tab="clone" role="tab" aria-selected="true">Clonage</button>
-                <button type="button" class="summiteo-tab" data-tab="rewrite" role="tab" aria-selected="false">Réécriture IA</button>
-                <button type="button" class="summiteo-tab" data-tab="images" role="tab" aria-selected="false">Images</button>
             </div>
 
-            <div id="summiteo-tab-clone" class="summiteo-tab-panel is-active" role="tabpanel">
+            <div id="summiteo-tab-clone" class="summiteo-tab-panel" role="tabpanel">
             <div class="summiteo-card">
                 <h2>Sélectionner une page source</h2>
                 <p>Recherche une page source, par exemple <strong>La Rochelle</strong>, puis clique sur <strong>Utiliser comme source</strong>.</p>
