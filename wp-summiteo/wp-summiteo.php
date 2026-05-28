@@ -2,15 +2,20 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 58.0.0
+ * Version: 59.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '58.0.0';
+    const VERSION = '59.0.0';
     const OPTION = 'wp_summiteo_settings';
+    const OPTION_GENERAL = 'wp_summiteo_general_settings';
+    const OPTION_CLONE = 'wp_summiteo_clone_settings';
+    const OPTION_AI = 'wp_summiteo_ai_settings';
+    const OPTION_IMAGES = 'wp_summiteo_image_settings';
+    const OPTION_PLATFORM = 'wp_summiteo_platform_settings';
     const LEGACY_OPTION = 'goldinfo_ai_connector_settings';
     const NS = 'wp-summiteo/v1';
 
@@ -25,43 +30,64 @@ class WP_Summiteo {
         add_filter('plugins_api', [$this, 'filter_plugins_api'], 10, 3);
     }
 
-    public static function defaults() {
-        return [
-            'source_city' => 'La Rochelle',
-            'target_city' => 'Bordeaux',
-            'target_department' => 'Gironde',
-            'selected_source_id' => '',
-            'selected_ai_page_id' => '',
-            'replacements' => "La Rochelle|Bordeaux\nRochelais|Bordelais\nCharente-Maritime|Gironde\ncomptoir-la-rochelle|comptoir-bordeaux\nachat-d-or-la-rochelle|achat-d-or-bordeaux\nvente-or-la-rochelle|vente-or-bordeaux\nachat-argent-la-rochelle|achat-argent-bordeaux\nvente-dargent-la-rochelle|vente-dargent-bordeaux\nvente-de-bijoux-anciens-a-la-rochelle|vente-de-bijoux-anciens-a-bordeaux",
-            'seo_title_tpl' => '{TITLE}',
-            'seo_desc_tpl' => '',
-            'editorial_brief' => '',
-            'openai_enabled' => '0',
-            'openai_api_key' => '',
-            'openai_model' => 'gpt-4.1-mini',
-            'unsplash_access_key' => '',
-            'update_manifest_url' => 'https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json',
-            'ai_block_limit' => '3',
+    public static function section_defaults($section) {
+        $defaults = [
+            'general' => [
+                'seo_title_tpl' => '{TITLE}',
+                'seo_desc_tpl' => '',
+                'openai_enabled' => '0',
+                'openai_api_key' => '',
+                'openai_model' => 'gpt-4.1-mini',
+                'unsplash_access_key' => '',
+                'update_manifest_url' => 'https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json',
+            ],
+            'clone' => [
+                'source_city' => 'La Rochelle',
+                'target_city' => 'Bordeaux',
+                'target_department' => 'Gironde',
+                'selected_source_id' => '',
+                'replacements' => "La Rochelle|Bordeaux\nRochelais|Bordelais\nCharente-Maritime|Gironde",
+            ],
+            'ai' => [
+                'selected_ai_page_id' => '',
+                'editorial_brief' => '',
+                'ai_block_limit' => '3',
+            ],
+            'images' => [
+                'selected_image_page_id' => '',
+                'default_query' => '',
+            ],
+            'platform' => [
+                'api_url' => '',
+                'site_key' => '',
+                'site_secret' => '',
+                'connected' => '0',
+            ],
         ];
+        return $defaults[$section] ?? [];
+    }
+
+    public static function defaults() {
+        return array_merge(
+            self::section_defaults('general'),
+            self::section_defaults('clone'),
+            self::section_defaults('ai'),
+            self::section_defaults('images'),
+            self::section_defaults('platform')
+        );
     }
 
     public static function settings() {
-        $settings = get_option(self::OPTION, null);
-        if (!is_array($settings)) {
-            $legacy = get_option(self::LEGACY_OPTION, []);
-            if (is_array($legacy) && !empty($legacy)) {
-                update_option(self::OPTION, $legacy, false);
-                $settings = $legacy;
-            } else {
-                $settings = [];
-            }
+        $general = wp_parse_args(get_option(self::OPTION_GENERAL, []), self::section_defaults('general'));
+        if (empty($general['update_manifest_url'])) {
+            $general['update_manifest_url'] = self::section_defaults('general')['update_manifest_url'];
+            update_option(self::OPTION_GENERAL, $general, false);
         }
-        $settings = wp_parse_args($settings, self::defaults());
-        if (empty($settings['update_manifest_url'])) {
-            $settings['update_manifest_url'] = self::defaults()['update_manifest_url'];
-            update_option(self::OPTION, $settings, false);
-        }
-        return $settings;
+        $clone = wp_parse_args(get_option(self::OPTION_CLONE, []), self::section_defaults('clone'));
+        $ai = wp_parse_args(get_option(self::OPTION_AI, []), self::section_defaults('ai'));
+        $images = wp_parse_args(get_option(self::OPTION_IMAGES, []), self::section_defaults('images'));
+        $platform = wp_parse_args(get_option(self::OPTION_PLATFORM, []), self::section_defaults('platform'));
+        return array_merge($general, $clone, $ai, $images, $platform);
     }
 
     public function admin_menu() {
@@ -71,28 +97,62 @@ class WP_Summiteo {
     }
 
     public function register_settings() {
-        register_setting('wp_summiteo_group', self::OPTION, [$this, 'sanitize_settings']);
+        register_setting('wp_summiteo_general_group', self::OPTION_GENERAL, [$this, 'sanitize_general_settings']);
+        register_setting('wp_summiteo_clone_group', self::OPTION_CLONE, [$this, 'sanitize_clone_settings']);
+        register_setting('wp_summiteo_ai_group', self::OPTION_AI, [$this, 'sanitize_ai_settings']);
+        register_setting('wp_summiteo_image_group', self::OPTION_IMAGES, [$this, 'sanitize_image_settings']);
+        register_setting('wp_summiteo_platform_group', self::OPTION_PLATFORM, [$this, 'sanitize_platform_settings']);
     }
 
-    public function sanitize_settings($input) {
-        $defaults = self::defaults();
-        $out = [];
-        foreach ($defaults as $key => $val) {
-            if ($key === 'openai_enabled') {
-                $out[$key] = !empty($input[$key]) ? '1' : '0';
-            } elseif ($key === 'openai_api_key' || $key === 'unsplash_access_key') {
-                $out[$key] = isset($input[$key]) ? trim(sanitize_text_field($input[$key])) : '';
-            } elseif ($key === 'update_manifest_url') {
-                $out[$key] = isset($input[$key]) ? esc_url_raw(trim((string)$input[$key])) : '';
-            } elseif ($key === 'ai_block_limit') {
-                $out[$key] = isset($input[$key]) ? max(1, min(30, absint($input[$key]))) : 3;
-            } elseif ($key === 'replacements' || $key === 'editorial_brief') {
-                $out[$key] = isset($input[$key]) ? wp_kses_post($input[$key]) : $val;
-            } else {
-                $out[$key] = isset($input[$key]) ? sanitize_text_field($input[$key]) : $val;
-            }
-        }
-        return $out;
+    public function sanitize_general_settings($input) {
+        $input = is_array($input) ? $input : [];
+        return [
+            'seo_title_tpl' => isset($input['seo_title_tpl']) ? sanitize_text_field($input['seo_title_tpl']) : '{TITLE}',
+            'seo_desc_tpl' => isset($input['seo_desc_tpl']) ? sanitize_textarea_field($input['seo_desc_tpl']) : '',
+            'openai_enabled' => !empty($input['openai_enabled']) ? '1' : '0',
+            'openai_api_key' => isset($input['openai_api_key']) ? trim(sanitize_text_field($input['openai_api_key'])) : '',
+            'openai_model' => isset($input['openai_model']) ? sanitize_text_field($input['openai_model']) : 'gpt-4.1-mini',
+            'unsplash_access_key' => isset($input['unsplash_access_key']) ? trim(sanitize_text_field($input['unsplash_access_key'])) : '',
+            'update_manifest_url' => isset($input['update_manifest_url']) ? esc_url_raw(trim((string)$input['update_manifest_url'])) : self::section_defaults('general')['update_manifest_url'],
+        ];
+    }
+
+    public function sanitize_clone_settings($input) {
+        $input = is_array($input) ? $input : [];
+        return [
+            'source_city' => isset($input['source_city']) ? sanitize_text_field($input['source_city']) : '',
+            'target_city' => isset($input['target_city']) ? sanitize_text_field($input['target_city']) : '',
+            'target_department' => isset($input['target_department']) ? sanitize_text_field($input['target_department']) : '',
+            'selected_source_id' => isset($input['selected_source_id']) ? (string)absint($input['selected_source_id']) : '',
+            'replacements' => isset($input['replacements']) ? wp_kses_post($input['replacements']) : '',
+        ];
+    }
+
+    public function sanitize_ai_settings($input) {
+        $input = is_array($input) ? $input : [];
+        return [
+            'selected_ai_page_id' => isset($input['selected_ai_page_id']) ? (string)absint($input['selected_ai_page_id']) : '',
+            'editorial_brief' => isset($input['editorial_brief']) ? wp_kses_post($input['editorial_brief']) : '',
+            'ai_block_limit' => isset($input['ai_block_limit']) ? (string)max(1, min(30, absint($input['ai_block_limit']))) : '3',
+        ];
+    }
+
+    public function sanitize_image_settings($input) {
+        $input = is_array($input) ? $input : [];
+        return [
+            'selected_image_page_id' => isset($input['selected_image_page_id']) ? (string)absint($input['selected_image_page_id']) : '',
+            'default_query' => isset($input['default_query']) ? sanitize_text_field($input['default_query']) : '',
+        ];
+    }
+
+    public function sanitize_platform_settings($input) {
+        $input = is_array($input) ? $input : [];
+        return [
+            'api_url' => isset($input['api_url']) ? esc_url_raw(trim((string)$input['api_url'])) : '',
+            'site_key' => isset($input['site_key']) ? sanitize_text_field($input['site_key']) : '',
+            'site_secret' => isset($input['site_secret']) ? sanitize_text_field($input['site_secret']) : '',
+            'connected' => !empty($input['connected']) ? '1' : '0',
+        ];
     }
 
     public function admin_assets($hook) {
@@ -362,6 +422,8 @@ JS;
         $source = !empty($s['selected_source_id']) ? get_post(absint($s['selected_source_id'])) : null;
         $default_new_title = $source ? $this->apply_replacements(get_the_title($source)) : '';
         $default_new_slug = $source ? sanitize_title($this->apply_replacements($source->post_name)) : '';
+        $image_page_id = !empty($s['selected_image_page_id']) ? $s['selected_image_page_id'] : $s['selected_ai_page_id'];
+        $image_query = !empty($s['default_query']) ? $s['default_query'] : trim($s['target_city'].' immobilier');
         ?>
         <div class="wrap">
                 <h1>WP Summiteo <span class="summiteo-pill">v<?php echo esc_html(self::VERSION); ?></span></h1>
@@ -370,6 +432,7 @@ JS;
                 <button type="button" class="summiteo-tab" data-tab="clone" role="tab" aria-selected="false">Clonage</button>
                 <button type="button" class="summiteo-tab" data-tab="rewrite" role="tab" aria-selected="false">Réécriture IA</button>
                 <button type="button" class="summiteo-tab" data-tab="images" role="tab" aria-selected="false">Images</button>
+                <button type="button" class="summiteo-tab" data-tab="platform" role="tab" aria-selected="false">Plateforme</button>
                 <button type="button" class="summiteo-tab" data-tab="settings" role="tab" aria-selected="false">Réglages</button>
             </div>
 
@@ -382,12 +445,15 @@ JS;
             <div id="summiteo-tab-clone" class="summiteo-tab-panel" role="tabpanel">
             <div class="summiteo-card">
                 <h2>Paramètres de clonage</h2>
-                <div class="summiteo-row"><label>Ville source</label><input form="wp-summiteo-settings-form" class="regular-text" name="<?php echo self::OPTION; ?>[source_city]" value="<?php echo esc_attr($s['source_city']); ?>"></div>
-                <div class="summiteo-row"><label>Ville destination</label><input form="wp-summiteo-settings-form" id="target_city" class="regular-text" name="<?php echo self::OPTION; ?>[target_city]" value="<?php echo esc_attr($s['target_city']); ?>"></div>
-                <div class="summiteo-row"><label>Département destination</label><input form="wp-summiteo-settings-form" class="regular-text" name="<?php echo self::OPTION; ?>[target_department]" value="<?php echo esc_attr($s['target_department']); ?>"></div>
-                <div class="summiteo-row"><label>Page source sélectionnée</label><div><input form="wp-summiteo-settings-form" id="selected_source_id" class="small-text" name="<?php echo self::OPTION; ?>[selected_source_id]" value="<?php echo esc_attr($s['selected_source_id']); ?>"> <span id="selected_source_label" class="summiteo-muted"><?php echo esc_html($s['selected_source_id'] ? 'ID '.$s['selected_source_id'] : 'Aucune source sélectionnée'); ?></span></div></div>
-                <div class="summiteo-row"><label>Remplacements</label><textarea form="wp-summiteo-settings-form" class="large-text" rows="10" name="<?php echo self::OPTION; ?>[replacements]"><?php echo esc_textarea($s['replacements']); ?></textarea><p class="description">Format : source|destination, une règle par ligne. Le remplacement Ville source → Ville destination est ajouté automatiquement, y compris en format slug.</p></div>
-                <button type="submit" form="wp-summiteo-settings-form" class="button button-secondary">Enregistrer les paramètres de clonage</button>
+                <form id="wp-summiteo-clone-form" method="post" action="options.php">
+                    <?php settings_fields('wp_summiteo_clone_group'); ?>
+                    <div class="summiteo-row"><label>Ville source</label><input class="regular-text" name="<?php echo self::OPTION_CLONE; ?>[source_city]" value="<?php echo esc_attr($s['source_city']); ?>"></div>
+                    <div class="summiteo-row"><label>Ville destination</label><input id="target_city" class="regular-text" name="<?php echo self::OPTION_CLONE; ?>[target_city]" value="<?php echo esc_attr($s['target_city']); ?>"></div>
+                    <div class="summiteo-row"><label>Département destination</label><input class="regular-text" name="<?php echo self::OPTION_CLONE; ?>[target_department]" value="<?php echo esc_attr($s['target_department']); ?>"></div>
+                    <div class="summiteo-row"><label>Page source sélectionnée</label><div><input id="selected_source_id" class="small-text" name="<?php echo self::OPTION_CLONE; ?>[selected_source_id]" value="<?php echo esc_attr($s['selected_source_id']); ?>"> <span id="selected_source_label" class="summiteo-muted"><?php echo esc_html($s['selected_source_id'] ? 'ID '.$s['selected_source_id'] : 'Aucune source sélectionnée'); ?></span></div></div>
+                    <div class="summiteo-row"><label>Remplacements</label><textarea class="large-text" rows="10" name="<?php echo self::OPTION_CLONE; ?>[replacements]"><?php echo esc_textarea($s['replacements']); ?></textarea><p class="description">Format : source|destination, une règle par ligne. Ces remplacements servent au titre, au slug et aux champs SEO.</p></div>
+                    <?php submit_button('Enregistrer les paramètres de clonage', 'secondary', 'submit', false); ?>
+                </form>
             </div>
 
             <div class="summiteo-card">
@@ -411,12 +477,15 @@ JS;
             <div class="summiteo-card">
                 <h2>Réécriture IA séparée</h2>
                 <p>Cette étape ne modifie pas le clonage Elementor. Sélectionne une page ou un article à réécrire, puis lance une prévisualisation avant application.</p>
-                <div class="summiteo-row"><label>Brief éditorial IA</label><textarea form="wp-summiteo-settings-form" class="large-text" rows="8" name="<?php echo self::OPTION; ?>[editorial_brief]" placeholder="Cible, ton, SEO local, contraintes de style, quartiers, CTA, règles HTML..."><?php echo esc_textarea($s['editorial_brief']); ?></textarea></div>
-                <button type="submit" form="wp-summiteo-settings-form" class="button button-secondary">Enregistrer le brief éditorial</button>
+                <form id="wp-summiteo-ai-form" method="post" action="options.php">
+                    <?php settings_fields('wp_summiteo_ai_group'); ?>
+                    <div class="summiteo-row"><label>Brief éditorial IA</label><textarea class="large-text" rows="8" name="<?php echo self::OPTION_AI; ?>[editorial_brief]" placeholder="Cible, ton, SEO local, contraintes de style, quartiers, CTA, règles HTML..."><?php echo esc_textarea($s['editorial_brief']); ?></textarea></div>
+                    <div class="summiteo-row"><label>Contenu IA sélectionné</label><div><input id="ai_page_id" class="small-text" name="<?php echo self::OPTION_AI; ?>[selected_ai_page_id]" value="<?php echo esc_attr($s['selected_ai_page_id']); ?>"> <span id="selected_ai_page_label" class="summiteo-muted"><?php echo esc_html($s['selected_ai_page_id'] ? 'ID '.$s['selected_ai_page_id'] : 'Aucun contenu sélectionné'); ?></span></div></div>
+                    <div class="summiteo-row"><label>Nombre de blocs à traiter</label><input id="ai_limit" class="small-text" name="<?php echo self::OPTION_AI; ?>[ai_block_limit]" value="<?php echo esc_attr($s['ai_block_limit']); ?>"> <span class="description">Limite les blocs envoyés à OpenAI pour tester et maîtriser les coûts.</span></div>
+                    <?php submit_button('Enregistrer les paramètres IA', 'secondary', 'submit', false); ?>
+                </form>
                 <div class="summiteo-row"><label>Rechercher une page ou un article</label><div><input id="summiteo-ai-page-search" class="regular-text" value="<?php echo esc_attr($s['target_city']); ?>"> <button type="button" id="summiteo-ai-search-btn" class="button">Rechercher</button></div></div>
                 <div id="summiteo-ai-results" class="summiteo-results"></div>
-                <div class="summiteo-row"><label>Contenu IA sélectionné</label><div><input id="ai_page_id" class="small-text" value="<?php echo esc_attr($s['selected_ai_page_id']); ?>"> <span id="selected_ai_page_label" class="summiteo-muted"><?php echo esc_html($s['selected_ai_page_id'] ? 'ID '.$s['selected_ai_page_id'] : 'Aucun contenu sélectionné'); ?></span></div></div>
-                <div class="summiteo-row"><label>Nombre de blocs à traiter</label><input id="ai_limit" class="small-text" value="<?php echo esc_attr($s['ai_block_limit']); ?>"> <span class="description">Limite les blocs envoyés à OpenAI pour tester et maîtriser les coûts.</span></div>
                 <button type="button" id="summiteo-detect-blocks-btn" class="button">Afficher les blocs détectés</button>
                 <button type="button" id="summiteo-ai-preview-btn" class="button">Prévisualiser la réécriture IA</button>
                 <button type="button" id="summiteo-ai-apply-btn" class="button button-secondary">Appliquer la réécriture IA au brouillon</button>
@@ -428,9 +497,13 @@ JS;
             <div class="summiteo-card">
                 <h2>Images libres de droits</h2>
                 <p>Détecte les images de la page, recherche des alternatives Unsplash, puis remplace uniquement l’image choisie après validation.</p>
-                <div class="summiteo-row"><label>Page ou article à analyser</label><div><input id="image_page_id" class="small-text" value="<?php echo esc_attr($s['selected_ai_page_id']); ?>"> <button type="button" id="summiteo-detect-images-btn" class="button">Afficher les images détectées</button></div></div>
+                <form id="wp-summiteo-images-form" method="post" action="options.php">
+                    <?php settings_fields('wp_summiteo_image_group'); ?>
+                    <div class="summiteo-row"><label>Page ou article à analyser</label><div><input id="image_page_id" class="small-text" name="<?php echo self::OPTION_IMAGES; ?>[selected_image_page_id]" value="<?php echo esc_attr($image_page_id); ?>"> <button type="button" id="summiteo-detect-images-btn" class="button">Afficher les images détectées</button></div></div>
+                    <div class="summiteo-row"><label>Recherche Unsplash</label><div><input id="unsplash_query" class="regular-text" name="<?php echo self::OPTION_IMAGES; ?>[default_query]" value="<?php echo esc_attr($image_query); ?>"> <button type="button" id="summiteo-unsplash-search-btn" class="button">Rechercher des images</button></div></div>
+                    <?php submit_button('Enregistrer les paramètres images', 'secondary', 'submit', false); ?>
+                </form>
                 <div id="summiteo-image-results" class="summiteo-results"></div>
-                <div class="summiteo-row"><label>Recherche Unsplash</label><div><input id="unsplash_query" class="regular-text" value="<?php echo esc_attr($s['target_city']); ?> immobilier"> <button type="button" id="summiteo-unsplash-search-btn" class="button">Rechercher des images</button></div></div>
                 <div id="summiteo-unsplash-results" class="summiteo-results"></div>
                 <button type="button" id="summiteo-replace-image-btn" class="button button-secondary">Remplacer l’image sélectionnée</button>
                 <button type="button" id="summiteo-repair-avia-images-btn" class="button">Réparer les images Avia</button>
@@ -439,20 +512,34 @@ JS;
             </div>
             </div>
 
+            <div id="summiteo-tab-platform" class="summiteo-tab-panel" role="tabpanel">
+            <div class="summiteo-card">
+                <h2>Plateforme Summiteo</h2>
+                <p>Préparation du lien entre le plugin WordPress et la future plateforme SaaS Summiteo.</p>
+                <form id="wp-summiteo-platform-form" method="post" action="options.php">
+                    <?php settings_fields('wp_summiteo_platform_group'); ?>
+                    <div class="summiteo-row"><label>URL API plateforme</label><input class="large-text" name="<?php echo self::OPTION_PLATFORM; ?>[api_url]" value="<?php echo esc_attr($s['api_url']); ?>" placeholder="https://app.summiteo.fr/api"></div>
+                    <div class="summiteo-row"><label>Clé site</label><input class="regular-text" name="<?php echo self::OPTION_PLATFORM; ?>[site_key]" value="<?php echo esc_attr($s['site_key']); ?>" autocomplete="off"></div>
+                    <div class="summiteo-row"><label>Secret site</label><input class="large-text" type="password" name="<?php echo self::OPTION_PLATFORM; ?>[site_secret]" value="<?php echo esc_attr($s['site_secret']); ?>" autocomplete="off"></div>
+                    <input type="hidden" name="<?php echo self::OPTION_PLATFORM; ?>[connected]" value="<?php echo esc_attr($s['connected']); ?>">
+                    <?php submit_button('Enregistrer la configuration plateforme', 'secondary', 'submit', false); ?>
+                </form>
+            </div>
+            </div>
+
             <div id="summiteo-tab-settings" class="summiteo-tab-panel" role="tabpanel">
             <div class="summiteo-card">
                 <h2>Réglages</h2>
-                <form id="wp-summiteo-settings-form" method="post" action="options.php">
-                    <?php settings_fields('wp_summiteo_group'); ?>
-                    <div class="summiteo-row"><label>SEO title modèle</label><input class="large-text" name="<?php echo self::OPTION; ?>[seo_title_tpl]" value="<?php echo esc_attr($s['seo_title_tpl']); ?>"></div>
-                    <div class="summiteo-row"><label>SEO description modèle</label><textarea class="large-text" rows="3" name="<?php echo self::OPTION; ?>[seo_desc_tpl]"><?php echo esc_textarea($s['seo_desc_tpl']); ?></textarea></div>
-                    <div class="summiteo-row"><label>Activer OpenAI</label><label><input type="checkbox" name="<?php echo self::OPTION; ?>[openai_enabled]" value="1" <?php checked($s['openai_enabled'], '1'); ?>> Autoriser la prévisualisation et la réécriture IA</label></div>
-                    <div class="summiteo-row"><label>Clé API OpenAI</label><input class="large-text" type="password" name="<?php echo self::OPTION; ?>[openai_api_key]" value="<?php echo esc_attr($s['openai_api_key']); ?>" autocomplete="off"></div>
-                    <div class="summiteo-row"><label>Modèle OpenAI</label><input class="regular-text" name="<?php echo self::OPTION; ?>[openai_model]" value="<?php echo esc_attr($s['openai_model']); ?>"></div>
+                <form id="wp-summiteo-general-form" method="post" action="options.php">
+                    <?php settings_fields('wp_summiteo_general_group'); ?>
+                    <div class="summiteo-row"><label>SEO title modèle</label><input class="large-text" name="<?php echo self::OPTION_GENERAL; ?>[seo_title_tpl]" value="<?php echo esc_attr($s['seo_title_tpl']); ?>"></div>
+                    <div class="summiteo-row"><label>SEO description modèle</label><textarea class="large-text" rows="3" name="<?php echo self::OPTION_GENERAL; ?>[seo_desc_tpl]"><?php echo esc_textarea($s['seo_desc_tpl']); ?></textarea></div>
+                    <div class="summiteo-row"><label>Activer OpenAI</label><label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[openai_enabled]" value="1" <?php checked($s['openai_enabled'], '1'); ?>> Autoriser la prévisualisation et la réécriture IA</label></div>
+                    <div class="summiteo-row"><label>Clé API OpenAI</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[openai_api_key]" value="<?php echo esc_attr($s['openai_api_key']); ?>" autocomplete="off"></div>
+                    <div class="summiteo-row"><label>Modèle OpenAI</label><input class="regular-text" name="<?php echo self::OPTION_GENERAL; ?>[openai_model]" value="<?php echo esc_attr($s['openai_model']); ?>"></div>
                     <div class="summiteo-row"><label>Connexion OpenAI</label><div><button id="summiteo-openai-test-btn" class="button" type="button">Tester la connexion API</button> <span class="description">Enregistre la clé avant de lancer le test.</span></div></div>
-                    <div class="summiteo-row"><label>Clé API Unsplash</label><input class="large-text" type="password" name="<?php echo self::OPTION; ?>[unsplash_access_key]" value="<?php echo esc_attr($s['unsplash_access_key']); ?>" autocomplete="off"></div>
-                    <div class="summiteo-row"><label>URL manifeste mise à jour</label><div><input class="large-text" name="<?php echo self::OPTION; ?>[update_manifest_url]" value="<?php echo esc_attr($s['update_manifest_url']); ?>" placeholder="https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json"><p class="description">URL utilisée par WordPress pour proposer les mises à jour automatiques du plugin.</p></div></div>
-                    <input type="hidden" name="<?php echo self::OPTION; ?>[ai_block_limit]" value="<?php echo esc_attr($s['ai_block_limit']); ?>">
+                    <div class="summiteo-row"><label>Clé API Unsplash</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[unsplash_access_key]" value="<?php echo esc_attr($s['unsplash_access_key']); ?>" autocomplete="off"></div>
+                    <div class="summiteo-row"><label>URL manifeste mise à jour</label><div><input class="large-text" name="<?php echo self::OPTION_GENERAL; ?>[update_manifest_url]" value="<?php echo esc_attr($s['update_manifest_url']); ?>" placeholder="https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json"><p class="description">URL utilisée par WordPress pour proposer les mises à jour automatiques du plugin.</p></div></div>
                     <?php submit_button('Enregistrer les réglages'); ?>
                 </form>
             </div>
