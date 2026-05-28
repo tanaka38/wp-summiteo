@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 61.0.0
+ * Version: 62.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '61.0.0';
+    const VERSION = '62.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -1776,99 +1776,13 @@ JS;
                 return $avia_parts;
             }
         }
-        $chunks = preg_split('/((?:<\/p>|<\/h[1-6]>|<\/li>|<br\s*\/?>)\s*|(?:\r?\n){2,})/i', $content, -1, PREG_SPLIT_DELIM_CAPTURE | PREG_SPLIT_NO_EMPTY);
-        if (!is_array($chunks) || empty($chunks)) {
-            $chunks = [$content];
-        }
-
-        $parts = [];
-        $current = '';
-        foreach ($chunks as $chunk) {
-            $current .= $chunk;
-            if (preg_match('/^(?:<\/p>|<\/h[1-6]>|<\/li>|<br\s*\/?>|\s+)$/i', trim($chunk)) || preg_match('/(?:<\/p>|<\/h[1-6]>|<\/li>|<br\s*\/?>)\s*$/i', $current)) {
-                $parts[] = $current;
-                $current = '';
-            }
-        }
-        if (trim($current) !== '') {
-            $parts[] = $current;
-        }
-
-        if (count($parts) < 2 && $this->visible_length($content) > 1200) {
-            $sentences = preg_split('/(?<=[.!?;:])\s+/u', $content, -1, PREG_SPLIT_NO_EMPTY);
-            $parts = [];
-            $buffer = '';
-            foreach ($sentences as $sentence) {
-                $candidate = trim($buffer === '' ? $sentence : $buffer . ' ' . $sentence);
-                if ($this->visible_length($candidate) > 900 && $buffer !== '') {
-                    $parts[] = $buffer;
-                    $buffer = $sentence;
-                } else {
-                    $buffer = $candidate;
-                }
-            }
-            if (trim($buffer) !== '') {
-                $parts[] = $buffer;
-            }
-        }
-
-        $split_parts = [];
-        foreach ($parts as $part) {
-            if ($this->visible_length($part) <= 700) {
-                $split_parts[] = $part;
-                continue;
-            }
-
-            $sentences = preg_split('/(?<=[.!?;:])\s+/u', $part, -1, PREG_SPLIT_NO_EMPTY);
-            if (!is_array($sentences) || count($sentences) < 2) {
-                $plain = $this->visible_text($part);
-                if (mb_strlen($plain) > 700) {
-                    $words = preg_split('/\s+/u', $plain, -1, PREG_SPLIT_NO_EMPTY);
-                    $buffer = '';
-                    foreach ($words as $word) {
-                        $candidate = trim($buffer === '' ? $word : $buffer . ' ' . $word);
-                        if (mb_strlen($candidate) > 650 && $buffer !== '') {
-                            $split_parts[] = $buffer;
-                            $buffer = $word;
-                        } else {
-                            $buffer = $candidate;
-                        }
-                    }
-                    if (trim($buffer) !== '') {
-                        $split_parts[] = $buffer;
-                    }
-                } else {
-                    $split_parts[] = $part;
-                }
-                continue;
-            }
-
-            $buffer = '';
-            foreach ($sentences as $sentence) {
-                $candidate = trim($buffer === '' ? $sentence : $buffer . ' ' . $sentence);
-                if ($this->visible_length($candidate) > 650 && $buffer !== '') {
-                    $split_parts[] = $buffer;
-                    $buffer = $sentence;
-                } else {
-                    $buffer = $candidate;
-                }
-            }
-            if (trim($buffer) !== '') {
-                $split_parts[] = $buffer;
-            }
-        }
-
-        $out = [];
-        foreach ($split_parts as $part) {
-            $visible_len = $this->visible_length($part);
-            $out[] = [
-                'text' => $part,
-                'rewritable' => $visible_len >= 45,
-                'prefix' => '',
-                'suffix' => '',
-            ];
-        }
-        return $out;
+        $visible_len = $this->visible_length($content);
+        return [[
+            'text' => $content,
+            'rewritable' => $visible_len >= 45,
+            'prefix' => '',
+            'suffix' => '',
+        ]];
     }
 
 
