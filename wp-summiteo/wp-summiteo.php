@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 54.0.0
+ * Version: 55.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '54.0.0';
+    const VERSION = '55.0.0';
     const OPTION = 'wp_summiteo_settings';
     const LEGACY_OPTION = 'goldinfo_ai_connector_settings';
     const NS = 'wp-summiteo/v1';
@@ -98,7 +98,7 @@ class WP_Summiteo {
     }
 
     private function admin_css() {
-        return '.summiteo-card{background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:18px;margin:18px 0;max-width:1100px}.summiteo-row{display:grid;grid-template-columns:220px 1fr;gap:12px;align-items:center;margin:12px 0}.summiteo-results{margin-top:12px}.summiteo-page{border:1px solid #dcdcde;border-radius:6px;padding:10px;margin:8px 0;background:#fafafa;display:flex;justify-content:space-between;gap:12px}.summiteo-muted{color:#646970}.summiteo-pill{display:inline-block;padding:2px 7px;border-radius:99px;background:#f0f0f1;margin-left:6px}.summiteo-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.summiteo-log{background:#1d2327;color:#f6f7f7;padding:12px;border-radius:6px;white-space:pre-wrap;max-width:1100px;overflow:auto} textarea.large-text{font-family:monospace}.summiteo-image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px}.summiteo-image-card{border:1px solid #dcdcde;border-radius:6px;background:#fafafa;padding:10px}.summiteo-image-card img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:4px;background:#f0f0f1}.summiteo-image-card.is-selected{border-color:#2271b1;box-shadow:0 0 0 1px #2271b1}.summiteo-image-card strong{display:block;margin:8px 0 4px}.summiteo-image-card .button{margin-top:8px}';
+        return '.summiteo-card{background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:18px;margin:18px 0;max-width:1100px}.summiteo-tabs{display:flex;gap:6px;margin:18px 0 0;max-width:1100px;border-bottom:1px solid #c3c4c7}.summiteo-tab{appearance:none;background:#f6f7f7;border:1px solid #c3c4c7;border-bottom:0;border-radius:6px 6px 0 0;color:#1d2327;cursor:pointer;font-weight:600;margin:0;padding:10px 14px}.summiteo-tab.is-active{background:#fff;color:#2271b1;box-shadow:inset 0 3px 0 #2271b1}.summiteo-tab-panel{display:none}.summiteo-tab-panel.is-active{display:block}.summiteo-row{display:grid;grid-template-columns:220px 1fr;gap:12px;align-items:center;margin:12px 0}.summiteo-results{margin-top:12px}.summiteo-page{border:1px solid #dcdcde;border-radius:6px;padding:10px;margin:8px 0;background:#fafafa;display:flex;justify-content:space-between;gap:12px}.summiteo-muted{color:#646970}.summiteo-pill{display:inline-block;padding:2px 7px;border-radius:99px;background:#f0f0f1;margin-left:6px}.summiteo-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.summiteo-log{background:#1d2327;color:#f6f7f7;padding:12px;border-radius:6px;white-space:pre-wrap;max-width:1100px;overflow:auto} textarea.large-text{font-family:monospace}.summiteo-image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px}.summiteo-image-card{border:1px solid #dcdcde;border-radius:6px;background:#fafafa;padding:10px}.summiteo-image-card img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:4px;background:#f0f0f1}.summiteo-image-card.is-selected{border-color:#2271b1;box-shadow:0 0 0 1px #2271b1}.summiteo-image-card strong{display:block;margin:8px 0 4px}.summiteo-image-card .button{margin-top:8px}';
     }
 
     private function admin_js() {
@@ -113,6 +113,13 @@ jQuery(function($){
   const restRoot = '{$rest_root}';
   const replacementPairs = {$replacement_pairs};
   function log(msg){ $('#summiteo-log').text(typeof msg === 'string' ? msg : JSON.stringify(msg,null,2)); }
+  $('.summiteo-tab').on('click', function(){
+    const tab = $(this).data('tab');
+    $('.summiteo-tab').removeClass('is-active').attr('aria-selected', 'false');
+    $(this).addClass('is-active').attr('aria-selected', 'true');
+    $('.summiteo-tab-panel').removeClass('is-active');
+    $('#summiteo-tab-' + tab).addClass('is-active');
+  });
   function slugify(value){
     return String(value || '')
       .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
@@ -376,6 +383,13 @@ JS;
                 </form>
             </div>
 
+            <div class="summiteo-tabs" role="tablist" aria-label="Fonctions WP Summiteo">
+                <button type="button" class="summiteo-tab is-active" data-tab="clone" role="tab" aria-selected="true">Clonage</button>
+                <button type="button" class="summiteo-tab" data-tab="rewrite" role="tab" aria-selected="false">Réécriture IA</button>
+                <button type="button" class="summiteo-tab" data-tab="images" role="tab" aria-selected="false">Images</button>
+            </div>
+
+            <div id="summiteo-tab-clone" class="summiteo-tab-panel is-active" role="tabpanel">
             <div class="summiteo-card">
                 <h2>Sélectionner une page source</h2>
                 <p>Recherche une page source, par exemple <strong>La Rochelle</strong>, puis clique sur <strong>Utiliser comme source</strong>.</p>
@@ -391,7 +405,9 @@ JS;
                 <button id="summiteo-clone-admin-btn" class="button button-primary">Cloner avec titre et slug adaptés</button>
                 <p class="description">Le clonage applique les remplacements au titre et au slug uniquement. Le contenu de la page est conservé tel quel.</p>
             </div>
+            </div>
 
+            <div id="summiteo-tab-rewrite" class="summiteo-tab-panel" role="tabpanel">
             <div class="summiteo-card">
                 <h2>Réécriture IA séparée</h2>
                 <p>Cette étape ne modifie pas le clonage Elementor. Sélectionne la page brouillon à réécrire, puis lance une prévisualisation avant application.</p>
@@ -404,7 +420,9 @@ JS;
                 <button id="summiteo-ai-apply-btn" class="button button-secondary">Appliquer la réécriture IA au brouillon</button>
                 <p class="description">Commencer avec 2 ou 3 blocs, puis vérifier dans Elementor avant de traiter davantage de contenu.</p>
             </div>
+            </div>
 
+            <div id="summiteo-tab-images" class="summiteo-tab-panel" role="tabpanel">
             <div class="summiteo-card">
                 <h2>Images libres de droits</h2>
                 <p>Détecte les images de la page, recherche des alternatives Unsplash, puis remplace uniquement l’image choisie après validation.</p>
@@ -416,6 +434,7 @@ JS;
                 <button type="button" id="summiteo-repair-avia-images-btn" class="button">Réparer les images Avia</button>
                 <button type="button" id="summiteo-sync-avia-editor-btn" class="button">Synchroniser l’éditeur Avia</button>
                 <p class="description">Les images sont importées dans la médiathèque. Les images Avia, Elementor et l’image mise en avant sont prises en charge.</p>
+            </div>
             </div>
 
             <div class="summiteo-card">
