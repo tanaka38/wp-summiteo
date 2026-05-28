@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 59.0.0
+ * Version: 60.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '59.0.0';
+    const VERSION = '60.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -35,7 +35,7 @@ class WP_Summiteo {
             'general' => [
                 'seo_title_tpl' => '{TITLE}',
                 'seo_desc_tpl' => '',
-                'openai_enabled' => '0',
+                'openai_enabled' => '1',
                 'openai_api_key' => '',
                 'openai_model' => 'gpt-4.1-mini',
                 'unsplash_access_key' => '',
@@ -52,6 +52,7 @@ class WP_Summiteo {
                 'selected_ai_page_id' => '',
                 'editorial_brief' => '',
                 'ai_block_limit' => '3',
+                'respect_text_length' => '0',
             ],
             'images' => [
                 'selected_image_page_id' => '',
@@ -83,6 +84,7 @@ class WP_Summiteo {
             $general['update_manifest_url'] = self::section_defaults('general')['update_manifest_url'];
             update_option(self::OPTION_GENERAL, $general, false);
         }
+        $general['openai_enabled'] = '1';
         $clone = wp_parse_args(get_option(self::OPTION_CLONE, []), self::section_defaults('clone'));
         $ai = wp_parse_args(get_option(self::OPTION_AI, []), self::section_defaults('ai'));
         $images = wp_parse_args(get_option(self::OPTION_IMAGES, []), self::section_defaults('images'));
@@ -109,7 +111,7 @@ class WP_Summiteo {
         return [
             'seo_title_tpl' => isset($input['seo_title_tpl']) ? sanitize_text_field($input['seo_title_tpl']) : '{TITLE}',
             'seo_desc_tpl' => isset($input['seo_desc_tpl']) ? sanitize_textarea_field($input['seo_desc_tpl']) : '',
-            'openai_enabled' => !empty($input['openai_enabled']) ? '1' : '0',
+            'openai_enabled' => '1',
             'openai_api_key' => isset($input['openai_api_key']) ? trim(sanitize_text_field($input['openai_api_key'])) : '',
             'openai_model' => isset($input['openai_model']) ? sanitize_text_field($input['openai_model']) : 'gpt-4.1-mini',
             'unsplash_access_key' => isset($input['unsplash_access_key']) ? trim(sanitize_text_field($input['unsplash_access_key'])) : '',
@@ -134,6 +136,7 @@ class WP_Summiteo {
             'selected_ai_page_id' => isset($input['selected_ai_page_id']) ? (string)absint($input['selected_ai_page_id']) : '',
             'editorial_brief' => isset($input['editorial_brief']) ? wp_kses_post($input['editorial_brief']) : '',
             'ai_block_limit' => isset($input['ai_block_limit']) ? (string)max(1, min(30, absint($input['ai_block_limit']))) : '3',
+            'respect_text_length' => !empty($input['respect_text_length']) ? '1' : '0',
         ];
     }
 
@@ -205,7 +208,7 @@ jQuery(function($){
     items.forEach(function(p){
       const safeTitle = $('<div>').text(p.title).html();
       const actionClass = mode === 'ai' ? 'summiteo-use-ai-page' : 'summiteo-use-source';
-      const actionText = mode === 'ai' ? 'Utiliser pour la réécriture IA' : 'Utiliser comme source';
+      const actionText = mode === 'ai' ? 'Utiliser pour le contenu' : 'Utiliser comme source';
       html += '<div class="summiteo-page"><div><strong>'+safeTitle+'</strong><br><span class="summiteo-muted">ID '+p.id+' · /'+p.slug+'/ · '+p.type+' · '+p.status+'</span>'+(p.is_elementor ? '<span class="summiteo-pill">Elementor</span>' : '')+'</div><div class="summiteo-actions"><button type="button" class="button '+actionClass+'" data-id="'+p.id+'" data-title="'+safeTitle+'" data-slug="'+p.slug+'">'+actionText+'</button><a class="button" target="_blank" href="'+p.edit_url+'">Modifier</a></div></div>';
     });
     $(target).html(html || '<p>Aucun résultat.</p>');
@@ -286,7 +289,7 @@ jQuery(function($){
     const apply = this.id === 'summiteo-ai-apply-btn';
     const pageId = $('#ai_page_id').val();
     if(!pageId){ alert('Indique l\'ID de la page ou de l’article à réécrire.'); return; }
-    log(apply ? 'Réécriture IA et application en cours...' : 'Prévisualisation IA en cours...');
+    log(apply ? 'Réécriture du contenu et application en cours...' : 'Prévisualisation du contenu en cours...');
     summiteoRest('/ai-rewrite-page', {id:pageId, limit:$('#ai_limit').val(), apply:apply})
       .done(function(resp){ log(resp); })
       .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur API'); });
@@ -430,7 +433,7 @@ JS;
             <div class="summiteo-tabs" role="tablist" aria-label="Fonctions WP Summiteo">
                 <button type="button" class="summiteo-tab is-active" data-tab="dashboard" role="tab" aria-selected="true">Tableau de bord</button>
                 <button type="button" class="summiteo-tab" data-tab="clone" role="tab" aria-selected="false">Clonage</button>
-                <button type="button" class="summiteo-tab" data-tab="rewrite" role="tab" aria-selected="false">Réécriture IA</button>
+                <button type="button" class="summiteo-tab" data-tab="rewrite" role="tab" aria-selected="false">Contenu</button>
                 <button type="button" class="summiteo-tab" data-tab="images" role="tab" aria-selected="false">Images</button>
                 <button type="button" class="summiteo-tab" data-tab="platform" role="tab" aria-selected="false">Plateforme</button>
                 <button type="button" class="summiteo-tab" data-tab="settings" role="tab" aria-selected="false">Réglages</button>
@@ -475,20 +478,21 @@ JS;
 
             <div id="summiteo-tab-rewrite" class="summiteo-tab-panel" role="tabpanel">
             <div class="summiteo-card">
-                <h2>Réécriture IA séparée</h2>
+                <h2>Contenu</h2>
                 <p>Cette étape ne modifie pas le clonage Elementor. Sélectionne une page ou un article à réécrire, puis lance une prévisualisation avant application.</p>
                 <form id="wp-summiteo-ai-form" method="post" action="options.php">
                     <?php settings_fields('wp_summiteo_ai_group'); ?>
                     <div class="summiteo-row"><label>Brief éditorial IA</label><textarea class="large-text" rows="8" name="<?php echo self::OPTION_AI; ?>[editorial_brief]" placeholder="Cible, ton, SEO local, contraintes de style, quartiers, CTA, règles HTML..."><?php echo esc_textarea($s['editorial_brief']); ?></textarea></div>
                     <div class="summiteo-row"><label>Contenu IA sélectionné</label><div><input id="ai_page_id" class="small-text" name="<?php echo self::OPTION_AI; ?>[selected_ai_page_id]" value="<?php echo esc_attr($s['selected_ai_page_id']); ?>"> <span id="selected_ai_page_label" class="summiteo-muted"><?php echo esc_html($s['selected_ai_page_id'] ? 'ID '.$s['selected_ai_page_id'] : 'Aucun contenu sélectionné'); ?></span></div></div>
                     <div class="summiteo-row"><label>Nombre de blocs à traiter</label><input id="ai_limit" class="small-text" name="<?php echo self::OPTION_AI; ?>[ai_block_limit]" value="<?php echo esc_attr($s['ai_block_limit']); ?>"> <span class="description">Limite les blocs envoyés à OpenAI pour tester et maîtriser les coûts.</span></div>
+                    <div class="summiteo-row"><label>Respecter la longueur des textes</label><label><input type="checkbox" name="<?php echo self::OPTION_AI; ?>[respect_text_length]" value="1" <?php checked($s['respect_text_length'], '1'); ?>> Appliquer les contrôles de longueur actuels pendant la réécriture</label></div>
                     <?php submit_button('Enregistrer les paramètres IA', 'secondary', 'submit', false); ?>
                 </form>
                 <div class="summiteo-row"><label>Rechercher une page ou un article</label><div><input id="summiteo-ai-page-search" class="regular-text" value="<?php echo esc_attr($s['target_city']); ?>"> <button type="button" id="summiteo-ai-search-btn" class="button">Rechercher</button></div></div>
                 <div id="summiteo-ai-results" class="summiteo-results"></div>
                 <button type="button" id="summiteo-detect-blocks-btn" class="button">Afficher les blocs détectés</button>
-                <button type="button" id="summiteo-ai-preview-btn" class="button">Prévisualiser la réécriture IA</button>
-                <button type="button" id="summiteo-ai-apply-btn" class="button button-secondary">Appliquer la réécriture IA au brouillon</button>
+                <button type="button" id="summiteo-ai-preview-btn" class="button">Prévisualiser la réécriture</button>
+                <button type="button" id="summiteo-ai-apply-btn" class="button button-secondary">Appliquer la réécriture au brouillon</button>
                 <p class="description">Commencer avec 2 ou 3 blocs, puis vérifier dans Elementor avant de traiter davantage de contenu.</p>
             </div>
             </div>
@@ -534,7 +538,6 @@ JS;
                     <?php settings_fields('wp_summiteo_general_group'); ?>
                     <div class="summiteo-row"><label>SEO title modèle</label><input class="large-text" name="<?php echo self::OPTION_GENERAL; ?>[seo_title_tpl]" value="<?php echo esc_attr($s['seo_title_tpl']); ?>"></div>
                     <div class="summiteo-row"><label>SEO description modèle</label><textarea class="large-text" rows="3" name="<?php echo self::OPTION_GENERAL; ?>[seo_desc_tpl]"><?php echo esc_textarea($s['seo_desc_tpl']); ?></textarea></div>
-                    <div class="summiteo-row"><label>Activer OpenAI</label><label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[openai_enabled]" value="1" <?php checked($s['openai_enabled'], '1'); ?>> Autoriser la prévisualisation et la réécriture IA</label></div>
                     <div class="summiteo-row"><label>Clé API OpenAI</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[openai_api_key]" value="<?php echo esc_attr($s['openai_api_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>Modèle OpenAI</label><input class="regular-text" name="<?php echo self::OPTION_GENERAL; ?>[openai_model]" value="<?php echo esc_attr($s['openai_model']); ?>"></div>
                     <div class="summiteo-row"><label>Connexion OpenAI</label><div><button id="summiteo-openai-test-btn" class="button" type="button">Tester la connexion API</button> <span class="description">Enregistre la clé avant de lancer le test.</span></div></div>
@@ -1880,7 +1883,8 @@ JS;
         $post = get_post($page_id);
         if (!$post) return new WP_Error('summiteo_not_found', 'Page introuvable.', ['status'=>404]);
         $s = self::settings();
-        if ($s['openai_enabled'] !== '1' || empty($s['openai_api_key'])) return new WP_Error('openai_disabled', 'OpenAI est désactivé ou la clé API est absente.', ['status'=>403]);
+        if (empty($s['openai_api_key'])) return new WP_Error('openai_disabled', 'La clé API OpenAI est absente.', ['status'=>403]);
+        $respect_length = !empty($s['respect_text_length']) && $s['respect_text_length'] === '1';
         if ($apply) {
             $can = $this->can_write();
             if (is_wp_error($can)) return $can;
@@ -1965,11 +1969,12 @@ JS;
                 'max_length' => $length_check['max_length'],
                 'target_length' => $length_check['target_length'],
                 'length_ok' => $length_check['ok'],
+                'length_control_enabled' => $respect_length,
                 'applied' => false,
                 'skipped_reason' => '',
             ];
             if ($apply) {
-                if (!$length_check['ok']) {
+                if ($respect_length && !$length_check['ok']) {
                     $item['skipped_reason'] = 'length_out_of_bounds';
                     $updates[] = $item;
                     $skipped_count++;
@@ -2016,8 +2021,9 @@ JS;
     private function openai_rewrite_block($block, $settings) {
         $original_html = (string)($block['text'] ?? '');
         $bounds = $this->length_bounds($original_html);
+        $respect_length = !empty($settings['respect_text_length']) && $settings['respect_text_length'] === '1';
         $is_classic = in_array(($block['widget_type'] ?? ''), ['classic-content','avia-content'], true);
-        $max_attempts = $is_classic ? 1 : 10;
+        $max_attempts = ($respect_length && !$is_classic) ? 10 : 1;
         $best_text = '';
         $best_distance = PHP_INT_MAX;
         $last_reason = '';
@@ -2046,13 +2052,16 @@ JS;
             if ($check['ok']) {
                 return $this->clean_html($text);
             }
+            if (!$respect_length) {
+                return $this->clean_html($text);
+            }
 
             $direction = ($check['new_length'] > $bounds['max']) ? 'raccourcir' : 'allonger';
             $delta = abs((int)$check['new_length'] - (int)$bounds['target']);
             $last_reason = 'Tentative ' . $attempt . ' non conforme. Le texte visible généré fait ' . $check['new_length'] . ' caractères visibles, hors balises HTML. Il faut ' . $direction . ' d\'environ ' . $delta . ' caractères visibles pour rester entre ' . $bounds['min'] . ' et ' . $bounds['max'] . ' caractères, cible idéale ' . $bounds['target'] . '. Ne compte pas les balises HTML. Ne rajoute pas de paragraphe. Ajuste uniquement la densité de la phrase : plus synthétique si trop long, plus précis si trop court.';
         }
 
-        if ($best_text !== '' && !$is_classic) {
+        if ($respect_length && $best_text !== '' && !$is_classic) {
             $repaired = $this->openai_repair_length($original_html, $best_text, $block, $settings, $bounds);
             if (!is_wp_error($repaired) && trim(wp_strip_all_tags($repaired)) !== '') {
                 $repair_check = $this->length_check($original_html, $repaired);
@@ -2074,6 +2083,13 @@ JS;
         $strict = $strict_retry ? "\nRÉÉCRITURE DE CORRECTION : la réponse précédente ne respectait pas la longueur. {$retry_reason}\n" : '';
         $content_label = (($block['widget_type'] ?? '') === 'avia-content') ? 'un texte Avia Builder' : ((($block['widget_type'] ?? '') === 'classic-content') ? 'un contenu WordPress classique' : 'un bloc Elementor');
         $attribute_rule = !empty($block['attribute']) ? "ATTRIBUT AVIA : ce texte sera réinjecté dans un attribut de shortcode. Réponds en texte brut uniquement, sans balise HTML, sans guillemet ouvrant/fermant, sans markdown.\n" : '';
+        $respect_length = !empty($settings['respect_text_length']) && $settings['respect_text_length'] === '1';
+        $length_rule = $respect_length
+            ? "LONGUEUR IMPÉRATIVE : le texte réécrit doit avoir une longueur très proche du texte source pour ne pas casser la mise en page Elementor.\n" .
+                "Texte source hors balises : {$old_len} caractères. Cible prioritaire : {$bounds['target']} caractères visibles. Fourchette acceptée : {$bounds['min']} à {$bounds['max']} caractères visibles.\n" .
+                "La longueur se mesure uniquement sur le texte visible, sans compter les balises HTML. Avant de répondre, ajuste mentalement la longueur du texte final.\n" .
+                "Si tu ajoutes un détail local, retire une précision ailleurs. Si le texte est trop court, ajoute seulement une précision utile, sans nouveau paragraphe.\n"
+            : "LONGUEUR : aucune limite stricte de longueur n'est imposée. Priorise la qualité éditoriale, la clarté et le naturel, tout en restant cohérent avec la structure du bloc source.\n";
         return "Tu réécris {$content_label} pour une page locale Maison Française de l'Or.\n" .
             "Objectif : vraie adaptation éditoriale locale, pas une simple substitution de ville.\n" .
             $attribute_rule .
@@ -2081,10 +2097,7 @@ JS;
             "STRUCTURE STRICTE : conserve le même nombre de paragraphes et de retours ligne que le bloc source. Paragraphes source : {$profile['p_count']}. BR source : {$profile['br_count']}. Si le bloc source n'a pas de balise <p>, n'ajoute pas de balise <p>.\n" .
             "N'ajoute pas de deuxième paragraphe, pas de nouvelle commune, pas de quartier, pas d'exemple produit supplémentaire, sauf si c'est déjà présent dans le texte source.\n" .
             "Respecte l'apostrophe simple si possible. N'utilise aucun emoji ni tiret long.\n" .
-            "LONGUEUR IMPÉRATIVE : le texte réécrit doit avoir une longueur très proche du texte source pour ne pas casser la mise en page Elementor.\n" .
-            "Texte source hors balises : {$old_len} caractères. Cible prioritaire : {$bounds['target']} caractères visibles. Fourchette acceptée : {$bounds['min']} à {$bounds['max']} caractères visibles.\n" .
-            "La longueur se mesure uniquement sur le texte visible, sans compter les balises HTML. Avant de répondre, ajuste mentalement la longueur du texte final.\n" .
-            "Si tu ajoutes un détail local, retire une précision ailleurs. Si le texte est trop court, ajoute seulement une précision utile, sans nouveau paragraphe.\n" .
+            $length_rule .
             $strict . "\n" .
             "Brief éditorial IA :\n" . $brief . "\n\n" .
             "Type de widget : " . ($block['widget_type'] ?? '') . "\n" .
