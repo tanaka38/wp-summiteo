@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 63.0.0
+ * Version: 64.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '63.0.0';
+    const VERSION = '64.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -39,6 +39,7 @@ class WP_Summiteo {
                 'openai_api_key' => '',
                 'openai_model' => 'gpt-4.1-mini',
                 'unsplash_access_key' => '',
+                'pexels_api_key' => '',
                 'update_manifest_url' => 'https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json',
             ],
             'clone' => [
@@ -114,6 +115,7 @@ class WP_Summiteo {
             'openai_api_key' => isset($input['openai_api_key']) ? trim(sanitize_text_field($input['openai_api_key'])) : '',
             'openai_model' => isset($input['openai_model']) ? sanitize_text_field($input['openai_model']) : 'gpt-4.1-mini',
             'unsplash_access_key' => isset($input['unsplash_access_key']) ? trim(sanitize_text_field($input['unsplash_access_key'])) : '',
+            'pexels_api_key' => isset($input['pexels_api_key']) ? trim(sanitize_text_field($input['pexels_api_key'])) : '',
             'update_manifest_url' => isset($input['update_manifest_url']) ? esc_url_raw(trim((string)$input['update_manifest_url'])) : self::section_defaults('general')['update_manifest_url'],
         ];
     }
@@ -304,7 +306,7 @@ jQuery(function($){
   });
 
   let selectedSummiteoImage = null;
-  let selectedUnsplashPhoto = null;
+  let selectedStockPhoto = null;
 
   function escapeHtml(value){ return $('<div>').text(value || '').html(); }
 
@@ -323,15 +325,16 @@ jQuery(function($){
     $('#summiteo-image-results').html(images && images.length ? html : '<p>Aucune image remplaçable détectée.</p>');
   }
 
-  function renderUnsplashPhotos(photos){
+  function renderStockPhotos(photos){
     let html = '<div class="summiteo-image-grid">';
     (photos || []).forEach(function(photo, index){
-      const author = photo.user && photo.user.name ? photo.user.name : 'Unsplash';
+      const provider = photo.provider || 'stock';
+      const author = photo.user && photo.user.name ? photo.user.name : provider;
       html += '<div class="summiteo-image-card" data-photo-index="'+index+'">'+
         '<img src="'+escapeHtml(photo.thumb || photo.regular)+'" alt="">'+
-        '<strong>'+escapeHtml(photo.alt || 'Image Unsplash')+'</strong>'+
-        '<div class="summiteo-muted">Photo : '+escapeHtml(author)+'</div>'+
-        '<button type="button" class="button summiteo-select-unsplash-photo" data-index="'+index+'">Choisir cette photo</button>'+
+        '<strong>'+escapeHtml(photo.alt || 'Image libre de droits')+'</strong>'+
+        '<div class="summiteo-muted">'+escapeHtml(provider)+' · Photo : '+escapeHtml(author)+'</div>'+
+        '<button type="button" class="button summiteo-select-stock-photo" data-index="'+index+'">Choisir cette photo</button>'+
       '</div>';
     });
     html += '</div>';
@@ -359,17 +362,18 @@ jQuery(function($){
   $('#summiteo-unsplash-search-btn').on('click', function(e){
     e.preventDefault();
     const query = $('#unsplash_query').val();
-    if(!query){ alert('Indique une recherche Unsplash.'); return; }
-    $('#summiteo-unsplash-results').html('<p>Recherche Unsplash...</p>');
-    summiteoRest('/search-unsplash', {query:query})
-      .done(function(resp){ selectedUnsplashPhoto = null; renderUnsplashPhotos(resp.photos || []); log(resp); })
-      .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur Unsplash'); });
+    const provider = $('#image_provider').val() || 'unsplash';
+    if(!query){ alert('Indique une recherche d’image.'); return; }
+    $('#summiteo-unsplash-results').html('<p>Recherche '+provider+'...</p>');
+    summiteoRest('/search-stock-images', {query:query, provider:provider})
+      .done(function(resp){ selectedStockPhoto = null; renderStockPhotos(resp.photos || []); log(resp); })
+      .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur recherche images'); });
   });
 
-  $(document).on('click', '.summiteo-select-unsplash-photo', function(){
+  $(document).on('click', '.summiteo-select-stock-photo', function(){
     const index = Number($(this).data('index'));
     const photos = $('#summiteo-unsplash-results').data('photos') || [];
-    selectedUnsplashPhoto = photos[index] || null;
+    selectedStockPhoto = photos[index] || null;
     $('.summiteo-image-card[data-photo-index]').removeClass('is-selected');
     $('.summiteo-image-card[data-photo-index="'+index+'"]').addClass('is-selected');
   });
@@ -379,9 +383,9 @@ jQuery(function($){
     const pageId = $('#image_page_id').val() || $('#ai_page_id').val();
     if(!pageId){ alert('Indique l\'ID de la page.'); return; }
     if(selectedSummiteoImage === null){ alert('Choisis une image détectée.'); return; }
-    if(!selectedUnsplashPhoto){ alert('Choisis une photo Unsplash.'); return; }
+    if(!selectedStockPhoto){ alert('Choisis une photo libre de droits.'); return; }
     log('Import et remplacement de l’image en cours...');
-    summiteoRest('/replace-image', {id:pageId, image_index:selectedSummiteoImage, photo:selectedUnsplashPhoto})
+    summiteoRest('/replace-image', {id:pageId, image_index:selectedSummiteoImage, photo:selectedStockPhoto})
       .done(function(resp){ log(resp); })
       .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur remplacement image'); });
   });
@@ -497,11 +501,12 @@ JS;
             <div id="summiteo-tab-images" class="summiteo-tab-panel" role="tabpanel">
             <div class="summiteo-card">
                 <h2>Images libres de droits</h2>
-                <p>Détecte les images de la page, recherche des alternatives Unsplash, puis remplace uniquement l’image choisie après validation.</p>
+                <p>Détecte les images de la page, recherche des alternatives libres de droits, puis remplace uniquement l’image choisie après validation.</p>
                 <form id="wp-summiteo-images-form" method="post" action="options.php">
                     <?php settings_fields('wp_summiteo_image_group'); ?>
                     <div class="summiteo-row"><label>Page ou article à analyser</label><div><input id="image_page_id" class="small-text" name="<?php echo self::OPTION_IMAGES; ?>[selected_image_page_id]" value="<?php echo esc_attr($image_page_id); ?>"> <button type="button" id="summiteo-detect-images-btn" class="button">Afficher les images détectées</button></div></div>
-                    <div class="summiteo-row"><label>Recherche Unsplash</label><div><input id="unsplash_query" class="regular-text" name="<?php echo self::OPTION_IMAGES; ?>[default_query]" value="<?php echo esc_attr($image_query); ?>"> <button type="button" id="summiteo-unsplash-search-btn" class="button">Rechercher des images</button></div></div>
+                    <div class="summiteo-row"><label>Source d’images</label><select id="image_provider"><option value="unsplash">Unsplash</option><option value="pexels">Pexels</option></select></div>
+                    <div class="summiteo-row"><label>Recherche image</label><div><input id="unsplash_query" class="regular-text" name="<?php echo self::OPTION_IMAGES; ?>[default_query]" value="<?php echo esc_attr($image_query); ?>"> <button type="button" id="summiteo-unsplash-search-btn" class="button">Rechercher des images</button></div></div>
                     <?php submit_button('Enregistrer les paramètres images', 'secondary', 'submit', false); ?>
                 </form>
                 <div id="summiteo-image-results" class="summiteo-results"></div>
@@ -539,6 +544,7 @@ JS;
                     <div class="summiteo-row"><label>Modèle OpenAI</label><input class="regular-text" name="<?php echo self::OPTION_GENERAL; ?>[openai_model]" value="<?php echo esc_attr($s['openai_model']); ?>"></div>
                     <div class="summiteo-row"><label>Connexion OpenAI</label><div><button id="summiteo-openai-test-btn" class="button" type="button">Tester la connexion API</button> <span class="description">Enregistre la clé avant de lancer le test.</span></div></div>
                     <div class="summiteo-row"><label>Clé API Unsplash</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[unsplash_access_key]" value="<?php echo esc_attr($s['unsplash_access_key']); ?>" autocomplete="off"></div>
+                    <div class="summiteo-row"><label>Clé API Pexels</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[pexels_api_key]" value="<?php echo esc_attr($s['pexels_api_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>URL manifeste mise à jour</label><div><input class="large-text" name="<?php echo self::OPTION_GENERAL; ?>[update_manifest_url]" value="<?php echo esc_attr($s['update_manifest_url']); ?>" placeholder="https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json"><p class="description">URL utilisée par WordPress pour proposer les mises à jour automatiques du plugin.</p></div></div>
                     <?php submit_button('Enregistrer les réglages'); ?>
                 </form>
@@ -601,6 +607,9 @@ JS;
         ]);
         register_rest_route(self::NS, '/search-unsplash', [
             'methods' => 'POST', 'callback' => [$this, 'rest_search_unsplash'], 'permission_callback' => [$this, 'can_write']
+        ]);
+        register_rest_route(self::NS, '/search-stock-images', [
+            'methods' => 'POST', 'callback' => [$this, 'rest_search_stock_images'], 'permission_callback' => [$this, 'can_write']
         ]);
         register_rest_route(self::NS, '/replace-image', [
             'methods' => 'POST', 'callback' => [$this, 'rest_replace_image'], 'permission_callback' => [$this, 'can_write']
@@ -922,7 +931,7 @@ JS;
     }
 
     public function rest_update_block(WP_REST_Request $r) {
-        $p = $r->get_json_params() ?: [];
+        $p = $r->get_json_params() ?: $r->get_params();
         $page_id=absint($p['page_id']??0); $element_id=sanitize_text_field($p['element_id']??''); $field=sanitize_text_field($p['field']??''); $new_value=isset($p['value']) ? wp_kses_post($p['value']) : '';
         $data = get_post_meta($page_id,'_elementor_data',true); $json=json_decode($data,true);
         if (!is_array($json)) return new WP_Error('summiteo_bad_elementor','Elementor JSON illisible',['status'=>400]);
@@ -935,7 +944,7 @@ JS;
     }
 
     public function rest_bulk_update_blocks(WP_REST_Request $r) {
-        $p = $r->get_json_params() ?: [];
+        $p = $r->get_json_params() ?: $r->get_params();
         $page_id = absint($p['page_id'] ?? 0);
         $updates = isset($p['updates']) && is_array($p['updates']) ? $p['updates'] : [];
         if (!$page_id || empty($updates)) return new WP_Error('summiteo_bad_request','page_id et updates sont requis.',['status'=>400]);
@@ -999,7 +1008,7 @@ JS;
     }
 
     public function rest_detect_images(WP_REST_Request $r) {
-        $p = $r->get_json_params() ?: [];
+        $p = $r->get_json_params() ?: $r->get_params();
         $page_id = absint($p['id'] ?? 0);
         if (!$page_id || !get_post($page_id)) return new WP_Error('summiteo_not_found', 'Page introuvable.', ['status'=>404]);
         $images = $this->collect_page_images($page_id);
@@ -1007,9 +1016,26 @@ JS;
     }
 
     public function rest_search_unsplash(WP_REST_Request $r) {
+        $p = $r->get_json_params() ?: $r->get_params();
+        $p['provider'] = 'unsplash';
+        $request = new WP_REST_Request('POST', '/' . self::NS . '/search-stock-images');
+        $request->set_body_params($p);
+        return $this->rest_search_stock_images($request);
+    }
+
+    public function rest_search_stock_images(WP_REST_Request $r) {
+        $p = $r->get_json_params() ?: $r->get_params();
+        $provider = sanitize_key($p['provider'] ?? 'unsplash');
+        if ($provider === 'pexels') {
+            return $this->search_pexels_photos($r);
+        }
+        return $this->search_unsplash_photos($r);
+    }
+
+    private function search_unsplash_photos(WP_REST_Request $r) {
         $s = self::settings();
         if (empty($s['unsplash_access_key'])) return new WP_Error('summiteo_unsplash_key_missing', 'Clé API Unsplash absente.', ['status'=>400]);
-        $p = $r->get_json_params() ?: [];
+        $p = $r->get_json_params() ?: $r->get_params();
         $query = trim(sanitize_text_field($p['query'] ?? ''));
         if ($query === '') return new WP_Error('summiteo_unsplash_query_missing', 'Recherche Unsplash vide.', ['status'=>400]);
         $url = add_query_arg([
@@ -1033,6 +1059,7 @@ JS;
         $photos = [];
         foreach (($json['results'] ?? []) as $photo) {
             $photos[] = [
+                'provider' => 'Unsplash',
                 'id' => sanitize_text_field($photo['id'] ?? ''),
                 'alt' => sanitize_text_field($photo['alt_description'] ?? ($photo['description'] ?? '')),
                 'thumb' => esc_url_raw($photo['urls']['small'] ?? ''),
@@ -1045,7 +1072,49 @@ JS;
                 ],
             ];
         }
-        return ['success'=>true, 'query'=>$query, 'count'=>count($photos), 'photos'=>$photos];
+        return ['success'=>true, 'provider'=>'unsplash', 'query'=>$query, 'count'=>count($photos), 'photos'=>$photos];
+    }
+
+    private function search_pexels_photos(WP_REST_Request $r) {
+        $s = self::settings();
+        if (empty($s['pexels_api_key'])) return new WP_Error('summiteo_pexels_key_missing', 'Clé API Pexels absente.', ['status'=>400]);
+        $p = $r->get_json_params() ?: $r->get_params();
+        $query = trim(sanitize_text_field($p['query'] ?? ''));
+        if ($query === '') return new WP_Error('summiteo_pexels_query_missing', 'Recherche Pexels vide.', ['status'=>400]);
+        $url = add_query_arg([
+            'query' => $query,
+            'per_page' => 6,
+            'orientation' => 'landscape',
+            'locale' => 'fr-FR',
+        ], 'https://api.pexels.com/v1/search');
+        $response = wp_remote_get($url, [
+            'timeout' => 15,
+            'headers' => ['Authorization' => $s['pexels_api_key']],
+        ]);
+        if (is_wp_error($response)) return new WP_Error('summiteo_pexels_network_error', 'Erreur réseau Pexels : ' . $response->get_error_message(), ['status'=>502]);
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        $json = json_decode($body, true);
+        if ($code < 200 || $code >= 300) {
+            $message = is_array($json) && !empty($json['error']) ? $json['error'] : $body;
+            return new WP_Error('summiteo_pexels_http_error', 'Erreur Pexels HTTP ' . $code . ' : ' . $message, ['status'=>502, 'pexels_status'=>$code]);
+        }
+        $photos = [];
+        foreach (($json['photos'] ?? []) as $photo) {
+            $photos[] = [
+                'provider' => 'Pexels',
+                'id' => sanitize_text_field($photo['id'] ?? ''),
+                'alt' => sanitize_text_field($photo['alt'] ?? ''),
+                'thumb' => esc_url_raw($photo['src']['medium'] ?? ''),
+                'regular' => esc_url_raw($photo['src']['large2x'] ?? ($photo['src']['large'] ?? '')),
+                'html' => esc_url_raw($photo['url'] ?? ''),
+                'user' => [
+                    'name' => sanitize_text_field($photo['photographer'] ?? ''),
+                    'html' => esc_url_raw($photo['photographer_url'] ?? ''),
+                ],
+            ];
+        }
+        return ['success'=>true, 'provider'=>'pexels', 'query'=>$query, 'count'=>count($photos), 'photos'=>$photos];
     }
 
     public function rest_replace_image(WP_REST_Request $r) {
@@ -1056,7 +1125,7 @@ JS;
         if (!$page_id || !get_post($page_id)) return new WP_Error('summiteo_not_found', 'Page introuvable.', ['status'=>404]);
         $images = $this->collect_page_images($page_id);
         if (!isset($images[$image_index])) return new WP_Error('summiteo_image_not_found', 'Image détectée introuvable.', ['status'=>404]);
-        $attachment_id = $this->import_unsplash_photo($photo, $page_id);
+        $attachment_id = $this->import_stock_photo($photo, $page_id);
         if (is_wp_error($attachment_id)) return $attachment_id;
         $updated = $this->replace_detected_image($page_id, $images[$image_index], $attachment_id);
         if (is_wp_error($updated)) return $updated;
@@ -1142,6 +1211,14 @@ JS;
         return $attrs;
     }
 
+    private function import_stock_photo($photo, $page_id) {
+        $provider = strtolower(sanitize_key($photo['provider'] ?? 'unsplash'));
+        if ($provider === 'pexels') {
+            return $this->import_pexels_photo($photo, $page_id);
+        }
+        return $this->import_unsplash_photo($photo, $page_id);
+    }
+
     private function import_unsplash_photo($photo, $page_id) {
         $s = self::settings();
         if (empty($s['unsplash_access_key'])) return new WP_Error('summiteo_unsplash_key_missing', 'Clé API Unsplash absente.', ['status'=>400]);
@@ -1177,6 +1254,34 @@ JS;
         update_post_meta($attachment_id, '_summiteo_unsplash_author', sanitize_text_field($photo['user']['name'] ?? ''));
         update_post_meta($attachment_id, '_summiteo_unsplash_author_url', esc_url_raw($photo['user']['html'] ?? ''));
         update_post_meta($attachment_id, '_summiteo_unsplash_photo_url', esc_url_raw($photo['html'] ?? ''));
+        return $attachment_id;
+    }
+
+    private function import_pexels_photo($photo, $page_id) {
+        $image_url = esc_url_raw($photo['regular'] ?? '');
+        if (!$image_url) return new WP_Error('summiteo_pexels_photo_invalid', 'Photo Pexels invalide.', ['status'=>400]);
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        $tmp = download_url($image_url, 30);
+        if (is_wp_error($tmp)) return $tmp;
+        $photo_id = sanitize_file_name((string)($photo['id'] ?? uniqid('pexels-', true)));
+        $file = [
+            'name' => 'pexels-' . $photo_id . '.jpg',
+            'tmp_name' => $tmp,
+        ];
+        $caption = trim((string)($photo['alt'] ?? ''));
+        $attachment_id = media_handle_sideload($file, $page_id, $caption);
+        if (is_wp_error($attachment_id)) {
+            @unlink($tmp);
+            return $attachment_id;
+        }
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($caption));
+        update_post_meta($attachment_id, '_summiteo_pexels_id', sanitize_text_field($photo['id'] ?? ''));
+        update_post_meta($attachment_id, '_summiteo_pexels_author', sanitize_text_field($photo['user']['name'] ?? ''));
+        update_post_meta($attachment_id, '_summiteo_pexels_author_url', esc_url_raw($photo['user']['html'] ?? ''));
+        update_post_meta($attachment_id, '_summiteo_pexels_photo_url', esc_url_raw($photo['html'] ?? ''));
         return $attachment_id;
     }
 
