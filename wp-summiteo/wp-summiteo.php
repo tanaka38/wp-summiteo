@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 67.0.0
+ * Version: 68.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '67.0.0';
+    const VERSION = '68.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -42,6 +42,7 @@ class WP_Summiteo {
                 'pexels_api_key' => '',
                 'adobe_stock_api_key' => '',
                 'enabled_image_sources' => ['unsplash','pexels'],
+                'translate_image_filenames' => '0',
                 'update_manifest_url' => 'https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json',
             ],
             'clone' => [
@@ -120,6 +121,7 @@ class WP_Summiteo {
             'pexels_api_key' => isset($input['pexels_api_key']) ? trim(sanitize_text_field($input['pexels_api_key'])) : '',
             'adobe_stock_api_key' => isset($input['adobe_stock_api_key']) ? trim(sanitize_text_field($input['adobe_stock_api_key'])) : '',
             'enabled_image_sources' => $this->sanitize_enabled_image_sources($input['enabled_image_sources'] ?? []),
+            'translate_image_filenames' => !empty($input['translate_image_filenames']) ? '1' : '0',
             'update_manifest_url' => isset($input['update_manifest_url']) ? esc_url_raw(trim((string)$input['update_manifest_url'])) : self::section_defaults('general')['update_manifest_url'],
         ];
     }
@@ -590,6 +592,7 @@ JS;
                         <label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[enabled_image_sources][]" value="pexels" <?php checked(in_array('pexels', (array)$s['enabled_image_sources'], true)); ?>> Pexels</label><br>
                         <label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[enabled_image_sources][]" value="adobe_stock" <?php checked(in_array('adobe_stock', (array)$s['enabled_image_sources'], true)); ?>> Adobe Stock</label>
                     </div></div>
+                    <div class="summiteo-row"><label>Traduire les images en français</label><div><label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[translate_image_filenames]" value="1" <?php checked($s['translate_image_filenames'], '1'); ?>> Traduire en français les noms de fichiers proposés</label><p class="description">Utilise OpenAI pendant la recherche d’images. Si aucune clé OpenAI n’est renseignée, le nom original est simplement nettoyé.</p></div></div>
                     <div class="summiteo-row"><label>Clé API Unsplash</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[unsplash_access_key]" value="<?php echo esc_attr($s['unsplash_access_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>Clé API Pexels</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[pexels_api_key]" value="<?php echo esc_attr($s['pexels_api_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>Clé API Adobe Stock</label><div><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[adobe_stock_api_key]" value="<?php echo esc_attr($s['adobe_stock_api_key']); ?>" autocomplete="off"><p class="description">La recherche Adobe Stock retourne des aperçus. Le téléchargement sans watermark nécessite le workflow de licence Adobe.</p></div></div>
@@ -1082,12 +1085,12 @@ JS;
             return $this->search_enabled_stock_sources($r);
         }
         if ($provider === 'pexels') {
-            return $this->search_pexels_photos($r);
+            return $this->prepare_stock_search_response($this->search_pexels_photos($r));
         }
         if ($provider === 'adobe_stock') {
-            return $this->search_adobe_stock_photos($r);
+            return $this->prepare_stock_search_response($this->search_adobe_stock_photos($r));
         }
-        return $this->search_unsplash_photos($r);
+        return $this->prepare_stock_search_response($this->search_unsplash_photos($r));
     }
 
     private function search_enabled_stock_sources(WP_REST_Request $r) {
@@ -1121,7 +1124,7 @@ JS;
             return new WP_Error('summiteo_stock_sources_failed', 'Aucune source image disponible : ' . implode(' | ', $errors), ['status'=>400, 'sources'=>$errors]);
         }
         $p = $r->get_json_params() ?: $r->get_params();
-        return ['success'=>true, 'provider'=>'enabled', 'sources'=>$sources, 'errors'=>$errors, 'query'=>trim(sanitize_text_field($p['query'] ?? '')), 'count'=>count($photos), 'photos'=>$photos];
+        return $this->prepare_stock_search_response(['success'=>true, 'provider'=>'enabled', 'sources'=>$sources, 'errors'=>$errors, 'query'=>trim(sanitize_text_field($p['query'] ?? '')), 'count'=>count($photos), 'photos'=>$photos]);
     }
 
     private function search_unsplash_photos(WP_REST_Request $r) {
@@ -1263,6 +1266,77 @@ JS;
         return ['success'=>true, 'provider'=>'adobe_stock', 'query'=>$query, 'count'=>count($photos), 'photos'=>$photos];
     }
 
+    private function prepare_stock_search_response($result) {
+        if (is_wp_error($result)) return $result;
+        if (!is_array($result)) return $result;
+        $photos = is_array($result['photos'] ?? null) ? $result['photos'] : [];
+        $result['photos'] = $this->prepare_stock_photo_filenames($photos);
+        $result['count'] = count($result['photos']);
+        return $result;
+    }
+
+    private function prepare_stock_photo_filenames($photos) {
+        $settings = self::settings();
+        $labels = [];
+        foreach ($photos as $photo) {
+            $labels[] = $this->stock_photo_label($photo);
+        }
+        $translated = [];
+        if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1' && !empty($settings['openai_api_key'])) {
+            $translated = $this->translate_stock_filename_labels($labels, $settings);
+        }
+        foreach ($photos as $index => $photo) {
+            $label = trim((string)($translated[$index] ?? $labels[$index] ?? ''));
+            $photos[$index]['proposed_filename'] = $this->stock_photo_filename_slug($label);
+        }
+        return $photos;
+    }
+
+    private function stock_photo_label($photo) {
+        $label = trim((string)($photo['alt'] ?? ''));
+        if ($label === '') {
+            $label = trim((string)($photo['title'] ?? ''));
+        }
+        if ($label === '') {
+            $label = trim((string)($photo['id'] ?? 'image'));
+        }
+        return $label;
+    }
+
+    private function translate_stock_filename_labels($labels, $settings) {
+        $labels = array_values(array_filter(array_map('trim', $labels), function($label) {
+            return $label !== '';
+        }));
+        if (empty($labels)) return [];
+        $prompt = "Traduis en francais ces titres d'images pour produire des noms de fichiers SEO courts et naturels.\n" .
+            "Contraintes : garde uniquement le sens visuel, pas de ponctuation marketing, pas de numerotation, pas d'extension de fichier.\n" .
+            "Retourne uniquement un tableau JSON de chaines, dans le meme ordre, avec exactement " . count($labels) . " elements.\n" .
+            "Titres :\n" . wp_json_encode($labels, JSON_UNESCAPED_UNICODE);
+        $response = wp_remote_post('https://api.openai.com/v1/responses', [
+            'timeout' => 30,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $settings['openai_api_key'],
+                'Content-Type' => 'application/json',
+            ],
+            'body' => wp_json_encode([
+                'model' => $settings['openai_model'] ?: 'gpt-4.1-mini',
+                'input' => $prompt,
+                'temperature' => 0,
+                'max_output_tokens' => 1200,
+            ]),
+        ]);
+        if (is_wp_error($response)) return [];
+        $code = wp_remote_retrieve_response_code($response);
+        if ($code < 200 || $code >= 300) return [];
+        $json = json_decode(wp_remote_retrieve_body($response), true);
+        $text = trim($this->extract_openai_text($json));
+        $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
+        $text = preg_replace('/\s*```$/', '', $text);
+        $translations = json_decode($text, true);
+        if (!is_array($translations) || count($translations) !== count($labels)) return [];
+        return array_map('sanitize_text_field', $translations);
+    }
+
     public function rest_replace_image(WP_REST_Request $r) {
         $p = $r->get_json_params() ?: [];
         $page_id = absint($p['id'] ?? 0);
@@ -1382,12 +1456,20 @@ JS;
         if ($source === '') {
             $source = $fallback_prefix . '-' . (string)($photo['id'] ?? wp_generate_uuid4());
         }
-        $source = preg_replace('/\.(jpe?g|png|webp|gif)$/i', '', $source);
-        $filename = sanitize_title($source);
+        $filename = $this->stock_photo_filename_slug($source);
         if ($filename === '') {
             $filename = sanitize_file_name($fallback_prefix . '-' . (string)($photo['id'] ?? wp_generate_uuid4()));
         }
-        return substr($filename, 0, 90) . '.jpg';
+        return $filename . '.jpg';
+    }
+
+    private function stock_photo_filename_slug($source) {
+        $source = preg_replace('/\.(jpe?g|png|webp|gif)$/i', '', (string)$source);
+        $filename = sanitize_title($source);
+        if ($filename === '') {
+            $filename = 'image';
+        }
+        return substr($filename, 0, 90);
     }
 
     private function import_unsplash_photo($photo, $page_id) {
