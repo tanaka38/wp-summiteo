@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 69.0.0
+ * Version: 70.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '69.0.0';
+    const VERSION = '70.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -1303,6 +1303,9 @@ JS;
         }
         foreach ($photos as $index => $photo) {
             $label = trim((string)($translated[$index] ?? $labels[$index] ?? ''));
+            if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1') {
+                $label = $this->localise_stock_filename_label($label);
+            }
             $photos[$index]['proposed_filename'] = $this->stock_photo_filename_slug($label);
         }
         return $photos;
@@ -1356,9 +1359,75 @@ JS;
         $text = trim($this->extract_openai_text($json));
         $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
         $text = preg_replace('/\s*```$/', '', $text);
-        $translations = json_decode($text, true);
+        $translations = $this->parse_translation_list($text);
         if (!is_array($translations) || count($translations) !== count($labels)) return [];
         return array_map('sanitize_text_field', $translations);
+    }
+
+    private function parse_translation_list($text) {
+        $text = trim((string)$text);
+        $translations = json_decode($text, true);
+        if (is_array($translations)) {
+            if (isset($translations['translations']) && is_array($translations['translations'])) {
+                return array_values($translations['translations']);
+            }
+            return array_values($translations);
+        }
+        if (preg_match('/\[[\s\S]*\]/', $text, $m)) {
+            $translations = json_decode($m[0], true);
+            if (is_array($translations)) return array_values($translations);
+        }
+        $lines = preg_split('/\R+/', $text);
+        $out = [];
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if ($line === '') continue;
+            $line = preg_replace('/^\s*(?:[-*]|\d+[\).\-\|:])\s*/', '', $line);
+            $line = trim($line, " \t\n\r\0\x0B\"'");
+            if ($line !== '') $out[] = $line;
+        }
+        return $out;
+    }
+
+    private function localise_stock_filename_label($label) {
+        $label = trim((string)$label);
+        if ($label === '') return $label;
+        $lower = strtolower($label);
+        $dictionary = [
+            'aerial view' => 'vue aerienne',
+            'body of water' => 'plan d eau',
+            'during daytime' => 'en journee',
+            'during day' => 'en journee',
+            'snow covered' => 'enneige',
+            'snowy landscape' => 'paysage enneige',
+            'mountain range' => 'massif montagneux',
+            'mountains' => 'montagnes',
+            'mountain' => 'montagne',
+            'trees' => 'arbres',
+            'tree' => 'arbre',
+            'water' => 'eau',
+            'lake' => 'lac',
+            'landscape' => 'paysage',
+            'foreground' => 'premier plan',
+            'background' => 'arriere plan',
+            'green' => 'vert',
+            'white boat' => 'bateau blanc',
+            'boat' => 'bateau',
+            'dock' => 'quai',
+            'sitting next to' => 'pres de',
+            'next to' => 'pres de',
+            'view' => 'vue',
+            'near' => 'pres de',
+            'with' => 'avec',
+            'and' => 'et',
+            'of' => 'de',
+        ];
+        $lower = preg_replace('/\b(a|an|the)\b/', '', $lower);
+        foreach ($dictionary as $english => $french) {
+            $lower = str_replace($english, $french, $lower);
+        }
+        $lower = preg_replace('/\s+/', ' ', trim($lower));
+        return $lower !== '' ? $lower : $label;
     }
 
     public function rest_replace_image(WP_REST_Request $r) {
