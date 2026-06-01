@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 66.0.0
+ * Version: 67.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '66.0.0';
+    const VERSION = '67.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -183,7 +183,7 @@ class WP_Summiteo {
     }
 
     private function admin_css() {
-        return '.summiteo-card{background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:18px;margin:18px 0;max-width:1100px}.summiteo-tabs{display:flex;gap:6px;margin:18px 0 0;max-width:1100px;border-bottom:1px solid #c3c4c7}.summiteo-tab{appearance:none;background:#f6f7f7;border:1px solid #c3c4c7;border-bottom:0;border-radius:6px 6px 0 0;color:#1d2327;cursor:pointer;font-weight:600;margin:0;padding:10px 14px}.summiteo-tab.is-active{background:#fff;color:#2271b1;box-shadow:inset 0 3px 0 #2271b1}.summiteo-tab-panel{display:none}.summiteo-tab-panel.is-active{display:block}.summiteo-row{display:grid;grid-template-columns:220px 1fr;gap:12px;align-items:center;margin:12px 0}.summiteo-results{margin-top:12px}.summiteo-page{border:1px solid #dcdcde;border-radius:6px;padding:10px;margin:8px 0;background:#fafafa;display:flex;justify-content:space-between;gap:12px}.summiteo-muted{color:#646970}.summiteo-pill{display:inline-block;padding:2px 7px;border-radius:99px;background:#f0f0f1;margin-left:6px}.summiteo-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.summiteo-log{background:#1d2327;color:#f6f7f7;padding:12px;border-radius:6px;white-space:pre-wrap;max-width:1100px;overflow:auto} textarea.large-text{font-family:monospace}.summiteo-image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px}.summiteo-image-card{border:1px solid #dcdcde;border-radius:6px;background:#fafafa;padding:10px}.summiteo-image-card img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:4px;background:#f0f0f1}.summiteo-image-card.is-selected{border-color:#2271b1;box-shadow:0 0 0 1px #2271b1}.summiteo-image-card strong{display:block;margin:8px 0 4px}.summiteo-image-card .button{margin-top:8px}';
+        return '.summiteo-card{background:#fff;border:1px solid #dcdcde;border-radius:8px;padding:18px;margin:18px 0;max-width:1100px}.summiteo-tabs{display:flex;gap:6px;margin:18px 0 0;max-width:1100px;border-bottom:1px solid #c3c4c7}.summiteo-tab{appearance:none;background:#f6f7f7;border:1px solid #c3c4c7;border-bottom:0;border-radius:6px 6px 0 0;color:#1d2327;cursor:pointer;font-weight:600;margin:0;padding:10px 14px}.summiteo-tab.is-active{background:#fff;color:#2271b1;box-shadow:inset 0 3px 0 #2271b1}.summiteo-tab-panel{display:none}.summiteo-tab-panel.is-active{display:block}.summiteo-row{display:grid;grid-template-columns:220px 1fr;gap:12px;align-items:center;margin:12px 0}.summiteo-results{margin-top:12px}.summiteo-page{border:1px solid #dcdcde;border-radius:6px;padding:10px;margin:8px 0;background:#fafafa;display:flex;justify-content:space-between;gap:12px}.summiteo-muted{color:#646970}.summiteo-pill{display:inline-block;padding:2px 7px;border-radius:99px;background:#f0f0f1;margin-left:6px}.summiteo-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.summiteo-log{background:#1d2327;color:#f6f7f7;padding:12px;border-radius:6px;white-space:pre-wrap;max-width:1100px;overflow:auto} textarea.large-text{font-family:monospace}.summiteo-image-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px}.summiteo-image-card{border:1px solid #dcdcde;border-radius:6px;background:#fafafa;padding:10px}.summiteo-image-card img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:4px;background:#f0f0f1}.summiteo-image-card.is-selected{border-color:#2271b1;box-shadow:0 0 0 1px #2271b1}.summiteo-image-card strong{display:block;margin:8px 0 4px}.summiteo-image-card .button{margin-top:8px}.summiteo-filename-label{display:block;margin-top:8px;font-weight:600}.summiteo-filename-label input{display:block;margin-top:4px;width:100%;max-width:100%}';
     }
 
     private function admin_js() {
@@ -326,6 +326,13 @@ jQuery(function($){
   let selectedStockPhoto = null;
 
   function escapeHtml(value){ return $('<div>').text(value || '').html(); }
+  function proposedImageFilename(photo){
+    let base = (photo && (photo.alt || photo.title || photo.id)) ? String(photo.alt || photo.title || photo.id) : 'image';
+    base = base.normalize ? base.normalize('NFD').replace(/[\u0300-\u036f]/g, '') : base;
+    base = base.toLowerCase().replace(/&amp;|&/g, ' et ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').replace(/-{2,}/g, '-');
+    if(!base){ base = 'image'; }
+    return base.substring(0, 90);
+  }
 
   function renderDetectedImages(images){
     let html = '<div class="summiteo-image-grid">';
@@ -343,15 +350,18 @@ jQuery(function($){
   }
 
   function renderStockPhotos(photos){
+    photos = photos || [];
     let html = '<div class="summiteo-image-grid">';
-    (photos || []).forEach(function(photo, index){
+    photos.forEach(function(photo, index){
         const provider = photo.provider || 'stock';
         const author = photo.user && photo.user.name ? photo.user.name : provider;
         const note = photo.license_note ? '<div class="summiteo-muted">'+escapeHtml(photo.license_note)+'</div>' : '';
+        photo.proposed_filename = photo.proposed_filename || proposedImageFilename(photo);
         html += '<div class="summiteo-image-card" data-photo-index="'+index+'">'+
         '<img src="'+escapeHtml(photo.thumb || photo.regular)+'" alt="">'+
         '<strong>'+escapeHtml(photo.alt || 'Image libre de droits')+'</strong>'+
         '<div class="summiteo-muted">'+escapeHtml(provider)+' · Photo : '+escapeHtml(author)+'</div>'+
+        '<label class="summiteo-filename-label">Nom du fichier proposé<input type="text" class="regular-text summiteo-photo-filename" data-index="'+index+'" value="'+escapeHtml(photo.proposed_filename)+'"></label>'+
         note+
         '<button type="button" class="button summiteo-select-stock-photo" data-index="'+index+'">Choisir cette photo</button>'+
       '</div>';
@@ -392,8 +402,23 @@ jQuery(function($){
     const index = Number($(this).data('index'));
     const photos = $('#summiteo-unsplash-results').data('photos') || [];
     selectedStockPhoto = photos[index] || null;
+    if(selectedStockPhoto){
+      selectedStockPhoto.proposed_filename = $('.summiteo-photo-filename[data-index="'+index+'"]').val() || selectedStockPhoto.proposed_filename || proposedImageFilename(selectedStockPhoto);
+    }
     $('.summiteo-image-card[data-photo-index]').removeClass('is-selected');
     $('.summiteo-image-card[data-photo-index="'+index+'"]').addClass('is-selected');
+  });
+
+  $(document).on('input', '.summiteo-photo-filename', function(){
+    const index = Number($(this).data('index'));
+    const photos = $('#summiteo-unsplash-results').data('photos') || [];
+    if(photos[index]){
+      photos[index].proposed_filename = $(this).val();
+      $('#summiteo-unsplash-results').data('photos', photos);
+      if(selectedStockPhoto === photos[index]){
+        selectedStockPhoto.proposed_filename = $(this).val();
+      }
+    }
   });
 
   $('#summiteo-replace-image-btn').on('click', function(e){
@@ -1346,6 +1371,25 @@ JS;
         return $this->import_unsplash_photo($photo, $page_id);
     }
 
+    private function stock_photo_filename($photo, $fallback_prefix) {
+        $source = trim((string)($photo['proposed_filename'] ?? ''));
+        if ($source === '') {
+            $source = trim((string)($photo['alt'] ?? ''));
+        }
+        if ($source === '') {
+            $source = trim((string)($photo['title'] ?? ''));
+        }
+        if ($source === '') {
+            $source = $fallback_prefix . '-' . (string)($photo['id'] ?? wp_generate_uuid4());
+        }
+        $source = preg_replace('/\.(jpe?g|png|webp|gif)$/i', '', $source);
+        $filename = sanitize_title($source);
+        if ($filename === '') {
+            $filename = sanitize_file_name($fallback_prefix . '-' . (string)($photo['id'] ?? wp_generate_uuid4()));
+        }
+        return substr($filename, 0, 90) . '.jpg';
+    }
+
     private function import_unsplash_photo($photo, $page_id) {
         $s = self::settings();
         if (empty($s['unsplash_access_key'])) return new WP_Error('summiteo_unsplash_key_missing', 'Clé API Unsplash absente.', ['status'=>400]);
@@ -1365,9 +1409,8 @@ JS;
         require_once ABSPATH . 'wp-admin/includes/image.php';
         $tmp = download_url($image_url, 30);
         if (is_wp_error($tmp)) return $tmp;
-        $photo_id = sanitize_file_name((string)($photo['id'] ?? uniqid('unsplash-', true)));
         $file = [
-            'name' => 'unsplash-' . $photo_id . '.jpg',
+            'name' => $this->stock_photo_filename($photo, 'unsplash'),
             'tmp_name' => $tmp,
         ];
         $caption = trim((string)($photo['alt'] ?? ''));
@@ -1393,9 +1436,8 @@ JS;
         require_once ABSPATH . 'wp-admin/includes/image.php';
         $tmp = download_url($image_url, 30);
         if (is_wp_error($tmp)) return $tmp;
-        $photo_id = sanitize_file_name((string)($photo['id'] ?? uniqid('pexels-', true)));
         $file = [
-            'name' => 'pexels-' . $photo_id . '.jpg',
+            'name' => $this->stock_photo_filename($photo, 'pexels'),
             'tmp_name' => $tmp,
         ];
         $caption = trim((string)($photo['alt'] ?? ''));
@@ -1421,9 +1463,8 @@ JS;
         require_once ABSPATH . 'wp-admin/includes/image.php';
         $tmp = download_url($image_url, 30);
         if (is_wp_error($tmp)) return $tmp;
-        $photo_id = sanitize_file_name((string)($photo['id'] ?? uniqid('adobe-stock-', true)));
         $file = [
-            'name' => 'adobe-stock-preview-' . $photo_id . '.jpg',
+            'name' => $this->stock_photo_filename($photo, 'adobe-stock-preview'),
             'tmp_name' => $tmp,
         ];
         $caption = trim((string)($photo['alt'] ?? ''));
