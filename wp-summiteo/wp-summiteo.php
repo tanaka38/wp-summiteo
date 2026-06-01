@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 68.0.0
+ * Version: 69.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '68.0.0';
+    const VERSION = '69.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -1153,11 +1153,18 @@ JS;
         }
         $photos = [];
         foreach (($json['results'] ?? []) as $photo) {
+            $alt = sanitize_text_field($photo['alt_description'] ?? '');
+            $description = sanitize_text_field($photo['description'] ?? '');
+            $slug = sanitize_text_field($photo['slug'] ?? '');
+            $filename_source = $alt ?: ($description ?: ($slug ?: $query));
             $photos[] = [
                 'provider' => 'Unsplash',
                 'provider_key' => 'unsplash',
                 'id' => sanitize_text_field($photo['id'] ?? ''),
-                'alt' => sanitize_text_field($photo['alt_description'] ?? ($photo['description'] ?? '')),
+                'alt' => $alt ?: $description,
+                'title' => $alt ?: $description,
+                'description' => $description,
+                'filename_source' => $filename_source,
                 'thumb' => esc_url_raw($photo['urls']['small'] ?? ''),
                 'regular' => esc_url_raw($photo['urls']['regular'] ?? ''),
                 'download_location' => esc_url_raw($photo['links']['download_location'] ?? ''),
@@ -1197,11 +1204,16 @@ JS;
         }
         $photos = [];
         foreach (($json['photos'] ?? []) as $photo) {
+            $alt = sanitize_text_field($photo['alt'] ?? '');
+            $filename_source = $alt ?: $query;
             $photos[] = [
                 'provider' => 'Pexels',
                 'provider_key' => 'pexels',
                 'id' => sanitize_text_field($photo['id'] ?? ''),
-                'alt' => sanitize_text_field($photo['alt'] ?? ''),
+                'alt' => $alt,
+                'title' => $alt,
+                'description' => $alt,
+                'filename_source' => $filename_source,
                 'thumb' => esc_url_raw($photo['src']['medium'] ?? ''),
                 'regular' => esc_url_raw($photo['src']['large2x'] ?? ($photo['src']['large'] ?? '')),
                 'html' => esc_url_raw($photo['url'] ?? ''),
@@ -1248,11 +1260,15 @@ JS;
         $photos = [];
         foreach (($json['files'] ?? []) as $photo) {
             $regular = esc_url_raw($photo['comp_url'] ?? ($photo['thumbnail_1000_url'] ?? ($photo['thumbnail_500_url'] ?? '')));
+            $title = sanitize_text_field($photo['title'] ?? '');
             $photos[] = [
                 'provider' => 'Adobe Stock',
                 'provider_key' => 'adobe_stock',
                 'id' => sanitize_text_field($photo['id'] ?? ''),
-                'alt' => sanitize_text_field($photo['title'] ?? ''),
+                'alt' => $title,
+                'title' => $title,
+                'description' => $title,
+                'filename_source' => $title ?: $query,
                 'thumb' => esc_url_raw($photo['thumbnail_500_url'] ?? ($photo['thumbnail_1000_url'] ?? $regular)),
                 'regular' => $regular,
                 'html' => esc_url_raw($photo['details_url'] ?? ''),
@@ -1293,9 +1309,15 @@ JS;
     }
 
     private function stock_photo_label($photo) {
-        $label = trim((string)($photo['alt'] ?? ''));
+        $label = trim((string)($photo['filename_source'] ?? ''));
+        if ($label === '') {
+            $label = trim((string)($photo['alt'] ?? ''));
+        }
         if ($label === '') {
             $label = trim((string)($photo['title'] ?? ''));
+        }
+        if ($label === '') {
+            $label = trim((string)($photo['description'] ?? ''));
         }
         if ($label === '') {
             $label = trim((string)($photo['id'] ?? 'image'));
@@ -1304,12 +1326,14 @@ JS;
     }
 
     private function translate_stock_filename_labels($labels, $settings) {
-        $labels = array_values(array_filter(array_map('trim', $labels), function($label) {
-            return $label !== '';
-        }));
+        $labels = array_values(array_map(function($label) {
+            $label = trim((string)$label);
+            return $label !== '' ? $label : 'image';
+        }, $labels));
         if (empty($labels)) return [];
         $prompt = "Traduis en francais ces titres d'images pour produire des noms de fichiers SEO courts et naturels.\n" .
             "Contraintes : garde uniquement le sens visuel, pas de ponctuation marketing, pas de numerotation, pas d'extension de fichier.\n" .
+            "Si un titre contient deja une requete en francais, reformule-la en nom de fichier court et naturel.\n" .
             "Retourne uniquement un tableau JSON de chaines, dans le meme ordre, avec exactement " . count($labels) . " elements.\n" .
             "Titres :\n" . wp_json_encode($labels, JSON_UNESCAPED_UNICODE);
         $response = wp_remote_post('https://api.openai.com/v1/responses', [
