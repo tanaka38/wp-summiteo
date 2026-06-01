@@ -1,30 +1,30 @@
 # WP Summiteo
 
-Plugin WordPress métier pour cloner et adapter des pages locales, avec prise en charge Elementor, Avia Builder, OpenAI et Unsplash.
+Plugin WordPress metier pour cloner et adapter des pages locales, avec prise en charge Elementor, Avia Builder, OpenAI, Unsplash, Pexels et Adobe Stock.
 
 ## Installation
 
-Télécharger le ZIP installable :
+Telecharger le ZIP installable :
 
 ```text
-https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v64-wordpress.zip
+https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v65-wordpress.zip
 ```
 
 Puis l'installer depuis WordPress :
 
 ```text
-Extensions > Ajouter une extension > Téléverser une extension
+Extensions > Ajouter une extension > Televerser une extension
 ```
 
-## Mise à jour automatique WordPress
+## Mise a jour automatique WordPress
 
-Dans WP Summiteo, renseigner le champ **URL manifeste mise à jour** avec :
+Dans WP Summiteo, renseigner le champ **URL manifeste mise a jour** avec :
 
 ```text
 https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
 ```
 
-WordPress proposera une mise à jour lorsqu'une version supérieure sera publiée dans `update.json`.
+WordPress proposera une mise a jour lorsqu'une version superieure sera publiee dans `update.json`.
 
 ## Structure
 
@@ -32,15 +32,15 @@ WordPress proposera une mise à jour lorsqu'une version supérieure sera publié
 wp-summiteo/
   wp-summiteo.php
 releases/
-  wp-summiteo-v64-wordpress.zip
+  wp-summiteo-v65-wordpress.zip
 update.json
 ```
 
 ## Publier une nouvelle version
 
-1. Mettre à jour la version dans `wp-summiteo/wp-summiteo.php`.
-2. Générer un nouveau ZIP dans `releases/`.
-3. Mettre à jour `update.json` :
+1. Mettre a jour la version dans `wp-summiteo/wp-summiteo.php`.
+2. Generer un nouveau ZIP dans `releases/`.
+3. Mettre a jour `update.json` :
    - `version`
    - `download_url`
    - `last_updated`

@@ -2,14 +2,14 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 64.0.0
+ * Version: 65.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '64.0.0';
+    const VERSION = '65.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -40,6 +40,8 @@ class WP_Summiteo {
                 'openai_model' => 'gpt-4.1-mini',
                 'unsplash_access_key' => '',
                 'pexels_api_key' => '',
+                'adobe_stock_api_key' => '',
+                'enabled_image_sources' => ['unsplash','pexels'],
                 'update_manifest_url' => 'https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json',
             ],
             'clone' => [
@@ -116,8 +118,23 @@ class WP_Summiteo {
             'openai_model' => isset($input['openai_model']) ? sanitize_text_field($input['openai_model']) : 'gpt-4.1-mini',
             'unsplash_access_key' => isset($input['unsplash_access_key']) ? trim(sanitize_text_field($input['unsplash_access_key'])) : '',
             'pexels_api_key' => isset($input['pexels_api_key']) ? trim(sanitize_text_field($input['pexels_api_key'])) : '',
+            'adobe_stock_api_key' => isset($input['adobe_stock_api_key']) ? trim(sanitize_text_field($input['adobe_stock_api_key'])) : '',
+            'enabled_image_sources' => $this->sanitize_enabled_image_sources($input['enabled_image_sources'] ?? []),
             'update_manifest_url' => isset($input['update_manifest_url']) ? esc_url_raw(trim((string)$input['update_manifest_url'])) : self::section_defaults('general')['update_manifest_url'],
         ];
+    }
+
+    private function sanitize_enabled_image_sources($sources) {
+        $allowed = ['unsplash','pexels','adobe_stock'];
+        $sources = is_array($sources) ? $sources : [];
+        $out = [];
+        foreach ($sources as $source) {
+            $source = sanitize_key($source);
+            if (in_array($source, $allowed, true)) {
+                $out[] = $source;
+            }
+        }
+        return array_values(array_unique($out));
     }
 
     public function sanitize_clone_settings($input) {
@@ -328,12 +345,14 @@ jQuery(function($){
   function renderStockPhotos(photos){
     let html = '<div class="summiteo-image-grid">';
     (photos || []).forEach(function(photo, index){
-      const provider = photo.provider || 'stock';
-      const author = photo.user && photo.user.name ? photo.user.name : provider;
-      html += '<div class="summiteo-image-card" data-photo-index="'+index+'">'+
+        const provider = photo.provider || 'stock';
+        const author = photo.user && photo.user.name ? photo.user.name : provider;
+        const note = photo.license_note ? '<div class="summiteo-muted">'+escapeHtml(photo.license_note)+'</div>' : '';
+        html += '<div class="summiteo-image-card" data-photo-index="'+index+'">'+
         '<img src="'+escapeHtml(photo.thumb || photo.regular)+'" alt="">'+
         '<strong>'+escapeHtml(photo.alt || 'Image libre de droits')+'</strong>'+
         '<div class="summiteo-muted">'+escapeHtml(provider)+' · Photo : '+escapeHtml(author)+'</div>'+
+        note+
         '<button type="button" class="button summiteo-select-stock-photo" data-index="'+index+'">Choisir cette photo</button>'+
       '</div>';
     });
@@ -362,10 +381,9 @@ jQuery(function($){
   $('#summiteo-unsplash-search-btn').on('click', function(e){
     e.preventDefault();
     const query = $('#unsplash_query').val();
-    const provider = $('#image_provider').val() || 'unsplash';
     if(!query){ alert('Indique une recherche d’image.'); return; }
-    $('#summiteo-unsplash-results').html('<p>Recherche '+provider+'...</p>');
-    summiteoRest('/search-stock-images', {query:query, provider:provider})
+    $('#summiteo-unsplash-results').html('<p>Recherche dans les sources activées...</p>');
+    summiteoRest('/search-stock-images', {query:query})
       .done(function(resp){ selectedStockPhoto = null; renderStockPhotos(resp.photos || []); log(resp); })
       .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur recherche images'); });
   });
@@ -505,7 +523,6 @@ JS;
                 <form id="wp-summiteo-images-form" method="post" action="options.php">
                     <?php settings_fields('wp_summiteo_image_group'); ?>
                     <div class="summiteo-row"><label>Page ou article à analyser</label><div><input id="image_page_id" class="small-text" name="<?php echo self::OPTION_IMAGES; ?>[selected_image_page_id]" value="<?php echo esc_attr($image_page_id); ?>"> <button type="button" id="summiteo-detect-images-btn" class="button">Afficher les images détectées</button></div></div>
-                    <div class="summiteo-row"><label>Source d’images</label><select id="image_provider"><option value="unsplash">Unsplash</option><option value="pexels">Pexels</option></select></div>
                     <div class="summiteo-row"><label>Recherche image</label><div><input id="unsplash_query" class="regular-text" name="<?php echo self::OPTION_IMAGES; ?>[default_query]" value="<?php echo esc_attr($image_query); ?>"> <button type="button" id="summiteo-unsplash-search-btn" class="button">Rechercher des images</button></div></div>
                     <?php submit_button('Enregistrer les paramètres images', 'secondary', 'submit', false); ?>
                 </form>
@@ -543,8 +560,14 @@ JS;
                     <div class="summiteo-row"><label>Clé API OpenAI</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[openai_api_key]" value="<?php echo esc_attr($s['openai_api_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>Modèle OpenAI</label><input class="regular-text" name="<?php echo self::OPTION_GENERAL; ?>[openai_model]" value="<?php echo esc_attr($s['openai_model']); ?>"></div>
                     <div class="summiteo-row"><label>Connexion OpenAI</label><div><button id="summiteo-openai-test-btn" class="button" type="button">Tester la connexion API</button> <span class="description">Enregistre la clé avant de lancer le test.</span></div></div>
+                    <div class="summiteo-row"><label>Sources d’images actives</label><div>
+                        <label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[enabled_image_sources][]" value="unsplash" <?php checked(in_array('unsplash', (array)$s['enabled_image_sources'], true)); ?>> Unsplash</label><br>
+                        <label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[enabled_image_sources][]" value="pexels" <?php checked(in_array('pexels', (array)$s['enabled_image_sources'], true)); ?>> Pexels</label><br>
+                        <label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[enabled_image_sources][]" value="adobe_stock" <?php checked(in_array('adobe_stock', (array)$s['enabled_image_sources'], true)); ?>> Adobe Stock</label>
+                    </div></div>
                     <div class="summiteo-row"><label>Clé API Unsplash</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[unsplash_access_key]" value="<?php echo esc_attr($s['unsplash_access_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>Clé API Pexels</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[pexels_api_key]" value="<?php echo esc_attr($s['pexels_api_key']); ?>" autocomplete="off"></div>
+                    <div class="summiteo-row"><label>Clé API Adobe Stock</label><div><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[adobe_stock_api_key]" value="<?php echo esc_attr($s['adobe_stock_api_key']); ?>" autocomplete="off"><p class="description">La recherche Adobe Stock retourne des aperçus. Le téléchargement sans watermark nécessite le workflow de licence Adobe.</p></div></div>
                     <div class="summiteo-row"><label>URL manifeste mise à jour</label><div><input class="large-text" name="<?php echo self::OPTION_GENERAL; ?>[update_manifest_url]" value="<?php echo esc_attr($s['update_manifest_url']); ?>" placeholder="https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json"><p class="description">URL utilisée par WordPress pour proposer les mises à jour automatiques du plugin.</p></div></div>
                     <?php submit_button('Enregistrer les réglages'); ?>
                 </form>
@@ -646,8 +669,12 @@ JS;
         $config = self::settings();
         $config['has_openai_api_key'] = !empty($config['openai_api_key']);
         $config['has_unsplash_access_key'] = !empty($config['unsplash_access_key']);
+        $config['has_pexels_api_key'] = !empty($config['pexels_api_key']);
+        $config['has_adobe_stock_api_key'] = !empty($config['adobe_stock_api_key']);
         unset($config['openai_api_key']);
         unset($config['unsplash_access_key']);
+        unset($config['pexels_api_key']);
+        unset($config['adobe_stock_api_key']);
         return ['success'=>true, 'config'=>$config];
     }
 
@@ -1026,10 +1053,50 @@ JS;
     public function rest_search_stock_images(WP_REST_Request $r) {
         $p = $r->get_json_params() ?: $r->get_params();
         $provider = sanitize_key($p['provider'] ?? 'unsplash');
+        if (empty($p['provider'])) {
+            return $this->search_enabled_stock_sources($r);
+        }
         if ($provider === 'pexels') {
             return $this->search_pexels_photos($r);
         }
+        if ($provider === 'adobe_stock') {
+            return $this->search_adobe_stock_photos($r);
+        }
         return $this->search_unsplash_photos($r);
+    }
+
+    private function search_enabled_stock_sources(WP_REST_Request $r) {
+        $s = self::settings();
+        $sources = is_array($s['enabled_image_sources'] ?? null) ? $s['enabled_image_sources'] : ['unsplash'];
+        if (empty($sources)) {
+            return new WP_Error('summiteo_no_stock_source_enabled', 'Aucune source image active. Coche au moins une source dans les reglages.', ['status'=>400]);
+        }
+        $photos = [];
+        $errors = [];
+        foreach ($sources as $source) {
+            $source = sanitize_key($source);
+            if ($source === 'unsplash') {
+                $result = $this->search_unsplash_photos($r);
+            } elseif ($source === 'pexels') {
+                $result = $this->search_pexels_photos($r);
+            } elseif ($source === 'adobe_stock') {
+                $result = $this->search_adobe_stock_photos($r);
+            } else {
+                continue;
+            }
+            if (is_wp_error($result)) {
+                $errors[$source] = $result->get_error_message();
+                continue;
+            }
+            foreach (($result['photos'] ?? []) as $photo) {
+                $photos[] = $photo;
+            }
+        }
+        if (empty($photos) && !empty($errors)) {
+            return new WP_Error('summiteo_stock_sources_failed', 'Aucune source image disponible : ' . implode(' | ', $errors), ['status'=>400, 'sources'=>$errors]);
+        }
+        $p = $r->get_json_params() ?: $r->get_params();
+        return ['success'=>true, 'provider'=>'enabled', 'sources'=>$sources, 'errors'=>$errors, 'query'=>trim(sanitize_text_field($p['query'] ?? '')), 'count'=>count($photos), 'photos'=>$photos];
     }
 
     private function search_unsplash_photos(WP_REST_Request $r) {
@@ -1060,6 +1127,7 @@ JS;
         foreach (($json['results'] ?? []) as $photo) {
             $photos[] = [
                 'provider' => 'Unsplash',
+                'provider_key' => 'unsplash',
                 'id' => sanitize_text_field($photo['id'] ?? ''),
                 'alt' => sanitize_text_field($photo['alt_description'] ?? ($photo['description'] ?? '')),
                 'thumb' => esc_url_raw($photo['urls']['small'] ?? ''),
@@ -1103,6 +1171,7 @@ JS;
         foreach (($json['photos'] ?? []) as $photo) {
             $photos[] = [
                 'provider' => 'Pexels',
+                'provider_key' => 'pexels',
                 'id' => sanitize_text_field($photo['id'] ?? ''),
                 'alt' => sanitize_text_field($photo['alt'] ?? ''),
                 'thumb' => esc_url_raw($photo['src']['medium'] ?? ''),
@@ -1115,6 +1184,58 @@ JS;
             ];
         }
         return ['success'=>true, 'provider'=>'pexels', 'query'=>$query, 'count'=>count($photos), 'photos'=>$photos];
+    }
+
+    private function search_adobe_stock_photos(WP_REST_Request $r) {
+        $s = self::settings();
+        if (empty($s['adobe_stock_api_key'])) return new WP_Error('summiteo_adobe_stock_key_missing', 'Clé API Adobe Stock absente.', ['status'=>400]);
+        $p = $r->get_json_params() ?: $r->get_params();
+        $query = trim(sanitize_text_field($p['query'] ?? ''));
+        if ($query === '') return new WP_Error('summiteo_adobe_stock_query_missing', 'Recherche Adobe Stock vide.', ['status'=>400]);
+        $url = add_query_arg([
+            'locale' => 'fr_FR',
+            'search_parameters[words]' => $query,
+            'search_parameters[limit]' => 6,
+            'search_parameters[thumbnail_size]' => 1000,
+            'search_parameters[filters][content_type:photo]' => 1,
+            'search_parameters[filters][orientation]' => 'horizontal',
+            'search_parameters[filters][premium]' => 'false',
+            'result_columns' => ['id','title','creator_name','thumbnail_500_url','thumbnail_1000_url','comp_url','details_url'],
+        ], 'https://stock.adobe.io/Rest/Media/1/Search/Files');
+        $response = wp_remote_get($url, [
+            'timeout' => 15,
+            'headers' => [
+                'x-api-key' => $s['adobe_stock_api_key'],
+                'x-Product' => 'WP Summiteo/' . self::VERSION,
+            ],
+        ]);
+        if (is_wp_error($response)) return new WP_Error('summiteo_adobe_stock_network_error', 'Erreur réseau Adobe Stock : ' . $response->get_error_message(), ['status'=>502]);
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        $json = json_decode($body, true);
+        if ($code < 200 || $code >= 300) {
+            $message = is_array($json) && !empty($json['error']) ? $json['error'] : $body;
+            return new WP_Error('summiteo_adobe_stock_http_error', 'Erreur Adobe Stock HTTP ' . $code . ' : ' . $message, ['status'=>502, 'adobe_stock_status'=>$code]);
+        }
+        $photos = [];
+        foreach (($json['files'] ?? []) as $photo) {
+            $regular = esc_url_raw($photo['comp_url'] ?? ($photo['thumbnail_1000_url'] ?? ($photo['thumbnail_500_url'] ?? '')));
+            $photos[] = [
+                'provider' => 'Adobe Stock',
+                'provider_key' => 'adobe_stock',
+                'id' => sanitize_text_field($photo['id'] ?? ''),
+                'alt' => sanitize_text_field($photo['title'] ?? ''),
+                'thumb' => esc_url_raw($photo['thumbnail_500_url'] ?? ($photo['thumbnail_1000_url'] ?? $regular)),
+                'regular' => $regular,
+                'html' => esc_url_raw($photo['details_url'] ?? ''),
+                'license_note' => 'Aperçu Adobe Stock. Le fichier final nécessite une licence Adobe.',
+                'user' => [
+                    'name' => sanitize_text_field($photo['creator_name'] ?? 'Adobe Stock'),
+                    'html' => '',
+                ],
+            ];
+        }
+        return ['success'=>true, 'provider'=>'adobe_stock', 'query'=>$query, 'count'=>count($photos), 'photos'=>$photos];
     }
 
     public function rest_replace_image(WP_REST_Request $r) {
@@ -1212,9 +1333,15 @@ JS;
     }
 
     private function import_stock_photo($photo, $page_id) {
-        $provider = strtolower(sanitize_key($photo['provider'] ?? 'unsplash'));
+        $provider = strtolower(sanitize_key($photo['provider_key'] ?? ($photo['provider'] ?? 'unsplash')));
+        if ($provider === 'adobestock') {
+            $provider = 'adobe_stock';
+        }
         if ($provider === 'pexels') {
             return $this->import_pexels_photo($photo, $page_id);
+        }
+        if ($provider === 'adobe_stock') {
+            return $this->import_adobe_stock_photo($photo, $page_id);
         }
         return $this->import_unsplash_photo($photo, $page_id);
     }
@@ -1282,6 +1409,34 @@ JS;
         update_post_meta($attachment_id, '_summiteo_pexels_author', sanitize_text_field($photo['user']['name'] ?? ''));
         update_post_meta($attachment_id, '_summiteo_pexels_author_url', esc_url_raw($photo['user']['html'] ?? ''));
         update_post_meta($attachment_id, '_summiteo_pexels_photo_url', esc_url_raw($photo['html'] ?? ''));
+        return $attachment_id;
+    }
+
+    private function import_adobe_stock_photo($photo, $page_id) {
+        $image_url = esc_url_raw($photo['regular'] ?? '');
+        if (!$image_url) return new WP_Error('summiteo_adobe_stock_photo_invalid', 'Photo Adobe Stock invalide.', ['status'=>400]);
+
+        require_once ABSPATH . 'wp-admin/includes/file.php';
+        require_once ABSPATH . 'wp-admin/includes/media.php';
+        require_once ABSPATH . 'wp-admin/includes/image.php';
+        $tmp = download_url($image_url, 30);
+        if (is_wp_error($tmp)) return $tmp;
+        $photo_id = sanitize_file_name((string)($photo['id'] ?? uniqid('adobe-stock-', true)));
+        $file = [
+            'name' => 'adobe-stock-preview-' . $photo_id . '.jpg',
+            'tmp_name' => $tmp,
+        ];
+        $caption = trim((string)($photo['alt'] ?? ''));
+        $attachment_id = media_handle_sideload($file, $page_id, $caption);
+        if (is_wp_error($attachment_id)) {
+            @unlink($tmp);
+            return $attachment_id;
+        }
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($caption));
+        update_post_meta($attachment_id, '_summiteo_adobe_stock_id', sanitize_text_field($photo['id'] ?? ''));
+        update_post_meta($attachment_id, '_summiteo_adobe_stock_author', sanitize_text_field($photo['user']['name'] ?? ''));
+        update_post_meta($attachment_id, '_summiteo_adobe_stock_photo_url', esc_url_raw($photo['html'] ?? ''));
+        update_post_meta($attachment_id, '_summiteo_adobe_stock_license_note', sanitize_text_field($photo['license_note'] ?? 'Aperçu Adobe Stock. Licence requise pour usage final.'));
         return $attachment_id;
     }
 
