@@ -1,15 +1,15 @@
 ﻿<?php
 /**
  * Plugin Name: WP Summiteo
- * Description: Connecteur métier sécurisé pour dupliquer et adapter les pages Elementor des comptoirs Maison Française de l'Or.
- * Version: 70.0.0
+ * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
+ * Version: 71.0.0
  * Author: Summiteo
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '70.0.0';
+    const VERSION = '71.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -2477,8 +2477,9 @@ JS;
                 "La longueur se mesure uniquement sur le texte visible, sans compter les balises HTML. Avant de répondre, ajuste mentalement la longueur du texte final.\n" .
                 "Si tu ajoutes un détail local, retire une précision ailleurs. Si le texte est trop court, ajoute seulement une précision utile, sans nouveau paragraphe.\n"
             : "LONGUEUR : aucune limite stricte de longueur n'est imposée. Priorise la qualité éditoriale, la clarté et le naturel, tout en restant cohérent avec la structure du bloc source.\n";
-        return "Tu réécris {$content_label} pour une page locale Maison Française de l'Or.\n" .
-            "Objectif : vraie adaptation éditoriale locale, pas une simple substitution de ville.\n" .
+        $brief_section = $brief !== '' ? "Brief éditorial IA :\n" . $brief . "\n\n" : "Brief éditorial IA : aucun brief fourni. Ne suppose aucun secteur d'activité, aucune marque et aucune consigne métier spécifique.\n\n";
+        return "Tu réécris {$content_label} pour un contenu WordPress.\n" .
+            "Objectif : améliorer la clarté, le naturel et la qualité éditoriale sans inventer de contexte métier absent du texte source.\n" .
             $attribute_rule .
             "Préserve les balises HTML utiles existantes comme <p>, <strong>, <br>. Ne renvoie que le HTML final du bloc, sans commentaire, sans markdown.\n" .
             "STRUCTURE STRICTE : conserve le même nombre de paragraphes et de retours ligne que le bloc source. Paragraphes source : {$profile['p_count']}. BR source : {$profile['br_count']}. Si le bloc source n'a pas de balise <p>, n'ajoute pas de balise <p>.\n" .
@@ -2486,7 +2487,7 @@ JS;
             "Respecte l'apostrophe simple si possible. N'utilise aucun emoji ni tiret long.\n" .
             $length_rule .
             $strict . "\n" .
-            "Brief éditorial IA :\n" . $brief . "\n\n" .
+            $brief_section .
             "Type de widget : " . ($block['widget_type'] ?? '') . "\n" .
             "Champ : " . ($block['field'] ?? '') . "\n" .
             "Texte actuel :\n" . ($block['text'] ?? '');
