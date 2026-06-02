@@ -2,14 +2,15 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
- * Version: 71.0.0
+ * Version: 72.0.0
  * Author: Summiteo
+ * Update URI: https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
  */
 
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '71.0.0';
+    const VERSION = '72.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -27,6 +28,9 @@ class WP_Summiteo {
         add_action('wp_ajax_wp_summiteo_admin_clone_page', [$this, 'ajax_admin_clone_page']);
         add_action('rest_api_init', [$this, 'register_routes']);
         add_filter('pre_set_site_transient_update_plugins', [$this, 'filter_update_plugins']);
+        add_filter('site_transient_update_plugins', [$this, 'filter_update_plugins']);
+        add_filter('pre_set_transient_update_plugins', [$this, 'filter_update_plugins']);
+        add_filter('transient_update_plugins', [$this, 'filter_update_plugins']);
         add_filter('plugins_api', [$this, 'filter_plugins_api'], 10, 3);
     }
 
@@ -713,6 +717,17 @@ JS;
         if (!version_compare((string)$manifest['version'], self::VERSION, '>')) return $transient;
 
         $plugin_file = plugin_basename(__FILE__);
+        if (!isset($transient->checked) || !is_array($transient->checked)) {
+            $transient->checked = [];
+        }
+        if (!isset($transient->response) || !is_array($transient->response)) {
+            $transient->response = [];
+        }
+        if (isset($transient->no_update) && is_array($transient->no_update)) {
+            unset($transient->no_update[$plugin_file]);
+        }
+        $transient->checked[$plugin_file] = self::VERSION;
+
         $update = (object)[
             'id' => $plugin_file,
             'slug' => 'wp-summiteo',
@@ -723,6 +738,7 @@ JS;
             'tested' => sanitize_text_field($manifest['tested'] ?? ''),
             'requires' => sanitize_text_field($manifest['requires'] ?? ''),
             'requires_php' => sanitize_text_field($manifest['requires_php'] ?? ''),
+            'update_uri' => esc_url_raw($manifest['update_uri'] ?? 'https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json'),
         ];
         if (!empty($manifest['icons']) && is_array($manifest['icons'])) $update->icons = $manifest['icons'];
         if (!empty($manifest['banners']) && is_array($manifest['banners'])) $update->banners = $manifest['banners'];
@@ -764,7 +780,8 @@ JS;
             $cached = get_site_transient($cache_key);
             if (is_array($cached)) return $cached;
         }
-        $response = wp_remote_get($url, [
+        $request_url = add_query_arg('_summiteo_t', time(), $url);
+        $response = wp_remote_get($request_url, [
             'timeout' => 12,
             'headers' => ['Accept' => 'application/json'],
         ]);
