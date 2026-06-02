@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
- * Version: 72.0.0
+ * Version: 73.0.0
  * Author: Summiteo
  * Update URI: https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '72.0.0';
+    const VERSION = '73.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -339,6 +339,11 @@ jQuery(function($){
     if(!base){ base = 'image'; }
     return base.substring(0, 90);
   }
+  function proposedImageAlt(photo){
+    let base = (photo && (photo.alt || photo.title || photo.filename_source || photo.proposed_filename || photo.id)) ? String(photo.alt || photo.title || photo.filename_source || photo.proposed_filename || photo.id) : '';
+    base = base.replace(/\.(jpe?g|png|webp|gif)$/i, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    return base;
+  }
 
   function renderDetectedImages(images){
     let html = '<div class="summiteo-image-grid">';
@@ -363,11 +368,13 @@ jQuery(function($){
         const author = photo.user && photo.user.name ? photo.user.name : provider;
         const note = photo.license_note ? '<div class="summiteo-muted">'+escapeHtml(photo.license_note)+'</div>' : '';
         photo.proposed_filename = photo.proposed_filename || proposedImageFilename(photo);
+        photo.proposed_alt = photo.proposed_alt || proposedImageAlt(photo);
         html += '<div class="summiteo-image-card" data-photo-index="'+index+'">'+
         '<img src="'+escapeHtml(photo.thumb || photo.regular)+'" alt="">'+
         '<strong>'+escapeHtml(photo.alt || 'Image libre de droits')+'</strong>'+
         '<div class="summiteo-muted">'+escapeHtml(provider)+' · Photo : '+escapeHtml(author)+'</div>'+
         '<label class="summiteo-filename-label">Nom du fichier proposé<input type="text" class="regular-text summiteo-photo-filename" data-index="'+index+'" value="'+escapeHtml(photo.proposed_filename)+'"></label>'+
+        '<label class="summiteo-filename-label">Balise ALT proposée<input type="text" class="regular-text summiteo-photo-alt" data-index="'+index+'" value="'+escapeHtml(photo.proposed_alt)+'"></label>'+
         note+
         '<button type="button" class="button summiteo-select-stock-photo" data-index="'+index+'">Choisir cette photo</button>'+
       '</div>';
@@ -410,6 +417,7 @@ jQuery(function($){
     selectedStockPhoto = photos[index] || null;
     if(selectedStockPhoto){
       selectedStockPhoto.proposed_filename = $('.summiteo-photo-filename[data-index="'+index+'"]').val() || selectedStockPhoto.proposed_filename || proposedImageFilename(selectedStockPhoto);
+      selectedStockPhoto.proposed_alt = $('.summiteo-photo-alt[data-index="'+index+'"]').val() || selectedStockPhoto.proposed_alt || proposedImageAlt(selectedStockPhoto);
     }
     $('.summiteo-image-card[data-photo-index]').removeClass('is-selected');
     $('.summiteo-image-card[data-photo-index="'+index+'"]').addClass('is-selected');
@@ -426,6 +434,17 @@ jQuery(function($){
       }
     }
   });
+  $(document).on('input', '.summiteo-photo-alt', function(){
+    const index = Number($(this).data('index'));
+    const photos = $('#summiteo-unsplash-results').data('photos') || [];
+    if(photos[index]){
+      photos[index].proposed_alt = $(this).val();
+      $('#summiteo-unsplash-results').data('photos', photos);
+      if(selectedStockPhoto === photos[index]){
+        selectedStockPhoto.proposed_alt = $(this).val();
+      }
+    }
+  });
 
   $('#summiteo-replace-image-btn').on('click', function(e){
     e.preventDefault();
@@ -433,6 +452,11 @@ jQuery(function($){
     if(!pageId){ alert('Indique l\'ID de la page.'); return; }
     if(selectedSummiteoImage === null){ alert('Choisis une image détectée.'); return; }
     if(!selectedStockPhoto){ alert('Choisis une photo libre de droits.'); return; }
+    const selectedPhotoIndex = $('#summiteo-unsplash-results .summiteo-image-card.is-selected[data-photo-index]').data('photo-index');
+    if(selectedPhotoIndex !== undefined){
+      selectedStockPhoto.proposed_filename = $('.summiteo-photo-filename[data-index="'+selectedPhotoIndex+'"]').val() || selectedStockPhoto.proposed_filename || proposedImageFilename(selectedStockPhoto);
+      selectedStockPhoto.proposed_alt = $('.summiteo-photo-alt[data-index="'+selectedPhotoIndex+'"]').val() || selectedStockPhoto.proposed_alt || proposedImageAlt(selectedStockPhoto);
+    }
     log('Import et remplacement de l’image en cours...');
     summiteoRest('/replace-image', {id:pageId, image_index:selectedSummiteoImage, photo:selectedStockPhoto})
       .done(function(resp){ log(resp); })
@@ -1582,6 +1606,31 @@ JS;
         return substr($filename, 0, 90);
     }
 
+    private function stock_photo_alt_text($photo) {
+        foreach (['proposed_alt', 'alt', 'title', 'filename_source', 'proposed_filename'] as $key) {
+            $value = trim(wp_strip_all_tags((string)($photo[$key] ?? '')));
+            $value = preg_replace('/\.(jpe?g|png|webp|gif)$/i', '', $value);
+            $value = preg_replace('/[-_]+/', ' ', $value);
+            $value = preg_replace('/\s+/', ' ', trim($value));
+            if ($value !== '') {
+                return sanitize_text_field($value);
+            }
+        }
+        return '';
+    }
+
+    private function update_attachment_alt_text($attachment_id, $alt_text) {
+        $alt_text = sanitize_text_field($alt_text);
+        update_post_meta($attachment_id, '_wp_attachment_image_alt', $alt_text);
+        if ($alt_text !== '') {
+            wp_update_post([
+                'ID' => $attachment_id,
+                'post_title' => $alt_text,
+                'post_excerpt' => $alt_text,
+            ]);
+        }
+    }
+
     private function import_unsplash_photo($photo, $page_id) {
         $s = self::settings();
         if (empty($s['unsplash_access_key'])) return new WP_Error('summiteo_unsplash_key_missing', 'Clé API Unsplash absente.', ['status'=>400]);
@@ -1605,13 +1654,13 @@ JS;
             'name' => $this->stock_photo_filename($photo, 'unsplash'),
             'tmp_name' => $tmp,
         ];
-        $caption = trim((string)($photo['alt'] ?? ''));
+        $caption = $this->stock_photo_alt_text($photo);
         $attachment_id = media_handle_sideload($file, $page_id, $caption);
         if (is_wp_error($attachment_id)) {
             @unlink($tmp);
             return $attachment_id;
         }
-        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($caption));
+        $this->update_attachment_alt_text($attachment_id, $caption);
         update_post_meta($attachment_id, '_summiteo_unsplash_id', sanitize_text_field($photo['id'] ?? ''));
         update_post_meta($attachment_id, '_summiteo_unsplash_author', sanitize_text_field($photo['user']['name'] ?? ''));
         update_post_meta($attachment_id, '_summiteo_unsplash_author_url', esc_url_raw($photo['user']['html'] ?? ''));
@@ -1632,13 +1681,13 @@ JS;
             'name' => $this->stock_photo_filename($photo, 'pexels'),
             'tmp_name' => $tmp,
         ];
-        $caption = trim((string)($photo['alt'] ?? ''));
+        $caption = $this->stock_photo_alt_text($photo);
         $attachment_id = media_handle_sideload($file, $page_id, $caption);
         if (is_wp_error($attachment_id)) {
             @unlink($tmp);
             return $attachment_id;
         }
-        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($caption));
+        $this->update_attachment_alt_text($attachment_id, $caption);
         update_post_meta($attachment_id, '_summiteo_pexels_id', sanitize_text_field($photo['id'] ?? ''));
         update_post_meta($attachment_id, '_summiteo_pexels_author', sanitize_text_field($photo['user']['name'] ?? ''));
         update_post_meta($attachment_id, '_summiteo_pexels_author_url', esc_url_raw($photo['user']['html'] ?? ''));
@@ -1659,13 +1708,13 @@ JS;
             'name' => $this->stock_photo_filename($photo, 'adobe-stock-preview'),
             'tmp_name' => $tmp,
         ];
-        $caption = trim((string)($photo['alt'] ?? ''));
+        $caption = $this->stock_photo_alt_text($photo);
         $attachment_id = media_handle_sideload($file, $page_id, $caption);
         if (is_wp_error($attachment_id)) {
             @unlink($tmp);
             return $attachment_id;
         }
-        update_post_meta($attachment_id, '_wp_attachment_image_alt', sanitize_text_field($caption));
+        $this->update_attachment_alt_text($attachment_id, $caption);
         update_post_meta($attachment_id, '_summiteo_adobe_stock_id', sanitize_text_field($photo['id'] ?? ''));
         update_post_meta($attachment_id, '_summiteo_adobe_stock_author', sanitize_text_field($photo['user']['name'] ?? ''));
         update_post_meta($attachment_id, '_summiteo_adobe_stock_photo_url', esc_url_raw($photo['html'] ?? ''));
@@ -1693,12 +1742,13 @@ JS;
         $post = get_post($page_id);
         if (!$post) return new WP_Error('summiteo_not_found', 'Page introuvable.', ['status'=>404]);
         $url = wp_get_attachment_url($attachment_id);
+        $alt_text = sanitize_text_field(get_post_meta($attachment_id, '_wp_attachment_image_alt', true));
         $old_attachment_id = absint($old_image['attachment_id'] ?? 0);
         $old_url = esc_url_raw($old_image['url'] ?? '');
         $count = 0;
         $matched_shortcode_before = '';
         $matched_shortcode_after = '';
-        $new_content = preg_replace_callback('/\[av_image\b[^\]]*\]/is', function($m) use (&$count, $occurrence, $attachment_id, $url) {
+        $new_content = preg_replace_callback('/\[av_image\b[^\]]*\]/is', function($m) use (&$count, $occurrence, $attachment_id, $url, $alt_text) {
             if ($count++ !== $occurrence) return $m[0];
             $GLOBALS['wp_summiteo_matched_avia_before'] = $m[0];
             $attrs = $this->parse_shortcode_attrs($m[0]);
@@ -1710,6 +1760,9 @@ JS;
             }
             if (array_key_exists('attachment', $attrs)) {
                 $shortcode = $this->replace_shortcode_attr($shortcode, 'attachment', (string)$attachment_id);
+            }
+            if ($alt_text !== '') {
+                $shortcode = $this->replace_shortcode_attr($shortcode, 'alt', $alt_text);
             }
             $shortcode = $this->remove_shortcode_attr($shortcode, 'size');
             if (strpos($shortcode, 'src=') === false && $url) {
