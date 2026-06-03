@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
- * Version: 73.0.0
+ * Version: 74.0.0
  * Author: Summiteo
  * Update URI: https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '73.0.0';
+    const VERSION = '74.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -620,7 +620,7 @@ JS;
                         <label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[enabled_image_sources][]" value="pexels" <?php checked(in_array('pexels', (array)$s['enabled_image_sources'], true)); ?>> Pexels</label><br>
                         <label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[enabled_image_sources][]" value="adobe_stock" <?php checked(in_array('adobe_stock', (array)$s['enabled_image_sources'], true)); ?>> Adobe Stock</label>
                     </div></div>
-                    <div class="summiteo-row"><label>Traduire les images en français</label><div><label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[translate_image_filenames]" value="1" <?php checked($s['translate_image_filenames'], '1'); ?>> Traduire en français les noms de fichiers proposés</label><p class="description">Utilise OpenAI pendant la recherche d’images. Si aucune clé OpenAI n’est renseignée, le nom original est simplement nettoyé.</p></div></div>
+                    <div class="summiteo-row"><label>Traduire les images en français</label><div><label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[translate_image_filenames]" value="1" <?php checked($s['translate_image_filenames'], '1'); ?>> Traduire en français les noms de fichiers et balises ALT proposés</label><p class="description">Utilise OpenAI pendant la recherche d’images. Si aucune clé OpenAI n’est renseignée, le nom original est simplement nettoyé et localisé autant que possible.</p></div></div>
                     <div class="summiteo-row"><label>Clé API Unsplash</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[unsplash_access_key]" value="<?php echo esc_attr($s['unsplash_access_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>Clé API Pexels</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[pexels_api_key]" value="<?php echo esc_attr($s['pexels_api_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>Clé API Adobe Stock</label><div><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[adobe_stock_api_key]" value="<?php echo esc_attr($s['adobe_stock_api_key']); ?>" autocomplete="off"><p class="description">La recherche Adobe Stock retourne des aperçus. Le téléchargement sans watermark nécessite le workflow de licence Adobe.</p></div></div>
@@ -1347,9 +1347,18 @@ JS;
             if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1') {
                 $label = $this->localise_stock_filename_label($label);
             }
+            $photos[$index]['proposed_alt'] = $this->stock_photo_alt_from_label($label);
             $photos[$index]['proposed_filename'] = $this->stock_photo_filename_slug($label);
         }
         return $photos;
+    }
+
+    private function stock_photo_alt_from_label($label) {
+        $label = wp_strip_all_tags((string)$label);
+        $label = preg_replace('/\.(jpe?g|png|webp|gif)$/i', '', $label);
+        $label = preg_replace('/[-_]+/', ' ', $label);
+        $label = preg_replace('/\s+/', ' ', trim($label));
+        return sanitize_text_field($label);
     }
 
     private function stock_photo_label($photo) {

@@ -1,14 +1,14 @@
 {
   "name": "WP Summiteo",
-  "version": "73.0.0",
-  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v73-wordpress.zip",
+  "version": "74.0.0",
+  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v74-wordpress.zip",
   "update_uri": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json",
   "homepage": "https://github.com/tanaka38/wp-summiteo",
   "author": "Summiteo",
   "requires": "6.0",
   "tested": "6.8",
   "requires_php": "7.4",
-  "last_updated": "2026-06-02",
+  "last_updated": "2026-06-03",
   "description": "Plugin metier WP Summiteo pour cloner et adapter des pages WordPress, Elementor et Avia Builder.",
-  "changelog": "<h4>73.0.0</h4><ul><li>Ajout d'un champ Balise ALT proposee dans la grille des images libres de droits.</li><li>Le champ ALT est pre-rempli avec le titre ou texte alternatif de l'image, puis reste modifiable avant remplacement.</li><li>L'ALT choisi est enregistre dans la mediatheque WordPress lors de l'import.</li><li>Pour Avia Builder, l'attribut alt du shortcode image est synchronise lors du remplacement.</li></ul><h4>72.0.0</h4><ul><li>Renforcement du systeme de mise a jour automatique sur les sites WordPress classiques.</li><li>Ajout de l'en-tete Update URI dans le fichier principal du plugin.</li><li>Injection de la mise a jour a la lecture et a l'ecriture des transients WordPress.</li><li>Ajout d'un cache-buster lors de la lecture du manifeste distant.</li></ul>"
+  "changelog": "<h4>74.0.0</h4><ul><li>L'option Traduire les images en francais s'applique maintenant aussi aux balises ALT proposees.</li><li>La balise ALT est generee depuis le libelle traduit utilise pour le nom de fichier.</li><li>Le libelle de l'option a ete precise dans les reglages.</li></ul><h4>73.0.0</h4><ul><li>Ajout d'un champ Balise ALT proposee dans la grille des images libres de droits.</li><li>Le champ ALT est pre-rempli avec le titre ou texte alternatif de l'image, puis reste modifiable avant remplacement.</li><li>L'ALT choisi est enregistre dans la mediatheque WordPress lors de l'import.</li><li>Pour Avia Builder, l'attribut alt du shortcode image est synchronise lors du remplacement.</li></ul>"
 }
