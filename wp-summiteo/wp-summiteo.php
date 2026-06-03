@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
- * Version: 79.0.0
+ * Version: 80.0.0
  * Author: Summiteo
  * Update URI: https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '79.0.0';
+    const VERSION = '80.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -2713,7 +2713,6 @@ JS;
             return new WP_Error('claude_disabled', 'La clé API Claude est absente.', ['status'=>403]);
         }
         $timeout = isset($args['timeout']) ? absint($args['timeout']) : 90;
-        $temperature = isset($args['temperature']) ? (float)$args['temperature'] : 0.1;
         $max_tokens = isset($args['max_tokens']) ? absint($args['max_tokens']) : 6000;
         $response = wp_remote_post('https://api.anthropic.com/v1/messages', [
             'timeout' => $timeout,
@@ -2725,7 +2724,6 @@ JS;
             'body' => wp_json_encode([
                 'model' => $settings['claude_model'] ?: 'claude-opus-4-1-20250805',
                 'max_tokens' => $max_tokens,
-                'temperature' => $temperature,
                 'messages' => [
                     ['role' => 'user', 'content' => $prompt],
                 ],
