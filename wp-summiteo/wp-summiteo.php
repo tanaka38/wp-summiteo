@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
- * Version: 75.0.0
+ * Version: 76.0.0
  * Author: Summiteo
  * Update URI: https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '75.0.0';
+    const VERSION = '76.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -340,8 +340,9 @@ jQuery(function($){
     return base.substring(0, 90);
   }
   function proposedImageAlt(photo){
-    let base = (photo && (photo.alt || photo.title || photo.filename_source || photo.proposed_filename || photo.id)) ? String(photo.alt || photo.title || photo.filename_source || photo.proposed_filename || photo.id) : '';
-    base = base.replace(/\.(jpe?g|png|webp|gif)$/i, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    let base = (photo && (photo.alt || photo.title || photo.filename_source || photo.description || photo.id)) ? String(photo.alt || photo.title || photo.filename_source || photo.description || photo.id) : '';
+    base = base.replace(/\.(jpe?g|png|webp|gif)$/i, '').replace(/[_]+/g, ' ').replace(/\s+/g, ' ').trim();
+    if(base){ base = base.charAt(0).toLocaleUpperCase() + base.slice(1); }
     return base;
   }
 
@@ -1342,12 +1343,20 @@ JS;
         if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1' && !empty($settings['openai_api_key'])) {
             $translated = $this->translate_stock_filename_labels($labels, $settings);
         }
+        $translated_alt = [];
+        if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1' && !empty($settings['openai_api_key'])) {
+            $translated_alt = $this->translate_stock_alt_labels($labels, $settings);
+        }
         foreach ($photos as $index => $photo) {
             $label = trim((string)($translated[$index] ?? $labels[$index] ?? ''));
             if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1') {
                 $label = $this->localise_stock_filename_label($label);
             }
-            $photos[$index]['proposed_alt'] = $this->stock_photo_alt_from_label($label, $photo);
+            $alt_label = trim((string)($translated_alt[$index] ?? $labels[$index] ?? ''));
+            if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1') {
+                $alt_label = $this->localise_stock_alt_label($alt_label, $photo);
+            }
+            $photos[$index]['proposed_alt'] = $this->stock_photo_alt_from_label($alt_label, $photo);
             $photos[$index]['proposed_filename'] = $this->stock_photo_filename_slug($label);
         }
         return $photos;
@@ -1363,6 +1372,15 @@ JS;
             }
         }
         return sanitize_text_field($this->capitalise_first_letter($label));
+    }
+
+    private function localise_stock_alt_label($label, $photo = []) {
+        $provider = strtolower(sanitize_key($photo['provider_key'] ?? ($photo['provider'] ?? '')));
+        $label = $this->clean_stock_alt_title($label, $provider);
+        if ($label === '') return $label;
+        $label = str_replace('_', ' ', $label);
+        $label = preg_replace('/\s+/', ' ', trim($label));
+        return $label;
     }
 
     private function clean_stock_alt_title($label, $provider = '') {
@@ -1424,6 +1442,42 @@ JS;
                 'input' => $prompt,
                 'temperature' => 0,
                 'max_output_tokens' => 1200,
+            ]),
+        ]);
+        if (is_wp_error($response)) return [];
+        $code = wp_remote_retrieve_response_code($response);
+        if ($code < 200 || $code >= 300) return [];
+        $json = json_decode(wp_remote_retrieve_body($response), true);
+        $text = trim($this->extract_openai_text($json));
+        $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
+        $text = preg_replace('/\s*```$/', '', $text);
+        $translations = $this->parse_translation_list($text);
+        if (!is_array($translations) || count($translations) !== count($labels)) return [];
+        return array_map('sanitize_text_field', $translations);
+    }
+
+    private function translate_stock_alt_labels($labels, $settings) {
+        $labels = array_values(array_map(function($label) {
+            $label = trim((string)$label);
+            return $label !== '' ? $label : 'image';
+        }, $labels));
+        if (empty($labels)) return [];
+        $prompt = "Traduis en francais ces titres d'images pour des balises ALT WordPress lisibles.\n" .
+            "Contraintes strictes : conserve le titre dans son integralite, garde les determinants et tous les mots utiles, conserve les accents, ne transforme jamais en slug, n'utilise pas d'underscore, pas d'extension de fichier.\n" .
+            "Si le titre est deja en francais, nettoie seulement les prefixes parasites et conserve une phrase naturelle.\n" .
+            "Retourne uniquement un tableau JSON de chaines, dans le meme ordre, avec exactement " . count($labels) . " elements.\n" .
+            "Titres :\n" . wp_json_encode($labels, JSON_UNESCAPED_UNICODE);
+        $response = wp_remote_post('https://api.openai.com/v1/responses', [
+            'timeout' => 30,
+            'headers' => [
+                'Authorization' => 'Bearer ' . $settings['openai_api_key'],
+                'Content-Type' => 'application/json',
+            ],
+            'body' => wp_json_encode([
+                'model' => $settings['openai_model'] ?: 'gpt-4.1-mini',
+                'input' => $prompt,
+                'temperature' => 0,
+                'max_output_tokens' => 1600,
             ]),
         ]);
         if (is_wp_error($response)) return [];

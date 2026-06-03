@@ -1,7 +1,7 @@
 {
   "name": "WP Summiteo",
-  "version": "75.0.0",
-  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v75-wordpress.zip",
+  "version": "76.0.0",
+  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v76-wordpress.zip",
   "update_uri": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json",
   "homepage": "https://github.com/tanaka38/wp-summiteo",
   "author": "Summiteo",
@@ -10,5 +10,5 @@
   "requires_php": "7.4",
   "last_updated": "2026-06-03",
   "description": "Plugin metier WP Summiteo pour cloner et adapter des pages WordPress, Elementor et Avia Builder.",
-  "changelog": "<h4>75.0.0</h4><ul><li>La balise ALT conserve maintenant le titre lisible complet avec majuscule et accents.</li><li>Le nom de fichier n'est plus utilise comme source de repli pour l'ALT.</li><li>Nettoyage du prefixe Pexels Photos gratuites de en debut de titre.</li><li>Ajout automatique d'une majuscule au premier mot de l'ALT.</li></ul><h4>74.0.0</h4><ul><li>L'option Traduire les images en francais s'applique maintenant aussi aux balises ALT proposees.</li><li>La balise ALT est generee depuis le libelle traduit utilise pour le nom de fichier.</li><li>Le libelle de l'option a ete precise dans les reglages.</li></ul>"
+  "changelog": "<h4>76.0.0</h4><ul><li>Separation complete de la generation du nom de fichier et de la balise ALT.</li><li>La balise ALT utilise maintenant une traduction dediee qui conserve le titre complet, les determinants, les accents et les espaces.</li><li>Suppression des underscores residuels dans les balises ALT proposees.</li><li>Le nettoyage Pexels conserve le titre restant sous forme de phrase lisible.</li></ul><h4>75.0.0</h4><ul><li>La balise ALT conserve maintenant le titre lisible complet avec majuscule et accents.</li><li>Le nom de fichier n'est plus utilise comme source de repli pour l'ALT.</li><li>Nettoyage du prefixe Pexels Photos gratuites de en debut de titre.</li><li>Ajout automatique d'une majuscule au premier mot de l'ALT.</li></ul>"
 }
