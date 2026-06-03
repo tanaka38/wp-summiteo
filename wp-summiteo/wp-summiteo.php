@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
- * Version: 74.0.0
+ * Version: 75.0.0
  * Author: Summiteo
  * Update URI: https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '74.0.0';
+    const VERSION = '75.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -1245,7 +1245,7 @@ JS;
         }
         $photos = [];
         foreach (($json['photos'] ?? []) as $photo) {
-            $alt = sanitize_text_field($photo['alt'] ?? '');
+            $alt = $this->clean_stock_alt_title(sanitize_text_field($photo['alt'] ?? ''), 'pexels');
             $filename_source = $alt ?: $query;
             $photos[] = [
                 'provider' => 'Pexels',
@@ -1347,18 +1347,42 @@ JS;
             if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1') {
                 $label = $this->localise_stock_filename_label($label);
             }
-            $photos[$index]['proposed_alt'] = $this->stock_photo_alt_from_label($label);
+            $photos[$index]['proposed_alt'] = $this->stock_photo_alt_from_label($label, $photo);
             $photos[$index]['proposed_filename'] = $this->stock_photo_filename_slug($label);
         }
         return $photos;
     }
 
-    private function stock_photo_alt_from_label($label) {
+    private function stock_photo_alt_from_label($label, $photo = []) {
+        $provider = strtolower(sanitize_key($photo['provider_key'] ?? ($photo['provider'] ?? '')));
+        $label = $this->clean_stock_alt_title($label, $provider);
+        if ($label === '') {
+            foreach (['alt', 'title', 'description', 'filename_source'] as $key) {
+                $label = $this->clean_stock_alt_title($photo[$key] ?? '', $provider);
+                if ($label !== '') break;
+            }
+        }
+        return sanitize_text_field($this->capitalise_first_letter($label));
+    }
+
+    private function clean_stock_alt_title($label, $provider = '') {
         $label = wp_strip_all_tags((string)$label);
         $label = preg_replace('/\.(jpe?g|png|webp|gif)$/i', '', $label);
-        $label = preg_replace('/[-_]+/', ' ', $label);
         $label = preg_replace('/\s+/', ' ', trim($label));
-        return sanitize_text_field($label);
+        if (strtolower((string)$provider) === 'pexels') {
+            $label = preg_replace('/^(?:photos?\s+gratuites?\s+de\s+)+/iu', '', $label);
+            $label = preg_replace('/\s+/', ' ', trim($label));
+        }
+        return $label;
+    }
+
+    private function capitalise_first_letter($text) {
+        $text = trim((string)$text);
+        if ($text === '') return '';
+        if (function_exists('mb_substr') && function_exists('mb_strtoupper') && function_exists('mb_strlen')) {
+            return mb_strtoupper(mb_substr($text, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($text, 1, mb_strlen($text, 'UTF-8'), 'UTF-8');
+        }
+        return strtoupper(substr($text, 0, 1)) . substr($text, 1);
     }
 
     private function stock_photo_label($photo) {
@@ -1616,13 +1640,11 @@ JS;
     }
 
     private function stock_photo_alt_text($photo) {
-        foreach (['proposed_alt', 'alt', 'title', 'filename_source', 'proposed_filename'] as $key) {
-            $value = trim(wp_strip_all_tags((string)($photo[$key] ?? '')));
-            $value = preg_replace('/\.(jpe?g|png|webp|gif)$/i', '', $value);
-            $value = preg_replace('/[-_]+/', ' ', $value);
-            $value = preg_replace('/\s+/', ' ', trim($value));
+        $provider = strtolower(sanitize_key($photo['provider_key'] ?? ($photo['provider'] ?? '')));
+        foreach (['proposed_alt', 'alt', 'title', 'description', 'filename_source'] as $key) {
+            $value = $this->clean_stock_alt_title($photo[$key] ?? '', $provider);
             if ($value !== '') {
-                return sanitize_text_field($value);
+                return sanitize_text_field($this->capitalise_first_letter($value));
             }
         }
         return '';
