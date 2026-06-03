@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
- * Version: 76.0.0
+ * Version: 77.0.0
  * Author: Summiteo
  * Update URI: https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '76.0.0';
+    const VERSION = '77.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -40,8 +40,11 @@ class WP_Summiteo {
                 'seo_title_tpl' => '{TITLE}',
                 'seo_desc_tpl' => '',
                 'openai_enabled' => '1',
+                'ai_provider' => 'openai',
                 'openai_api_key' => '',
                 'openai_model' => 'gpt-4.1-mini',
+                'claude_api_key' => '',
+                'claude_model' => 'claude-3-5-sonnet-20241022',
                 'unsplash_access_key' => '',
                 'pexels_api_key' => '',
                 'adobe_stock_api_key' => '',
@@ -119,8 +122,11 @@ class WP_Summiteo {
             'seo_title_tpl' => isset($input['seo_title_tpl']) ? sanitize_text_field($input['seo_title_tpl']) : '{TITLE}',
             'seo_desc_tpl' => isset($input['seo_desc_tpl']) ? sanitize_textarea_field($input['seo_desc_tpl']) : '',
             'openai_enabled' => '1',
+            'ai_provider' => $this->sanitize_ai_provider($input['ai_provider'] ?? 'openai'),
             'openai_api_key' => isset($input['openai_api_key']) ? trim(sanitize_text_field($input['openai_api_key'])) : '',
             'openai_model' => isset($input['openai_model']) ? sanitize_text_field($input['openai_model']) : 'gpt-4.1-mini',
+            'claude_api_key' => isset($input['claude_api_key']) ? trim(sanitize_text_field($input['claude_api_key'])) : '',
+            'claude_model' => isset($input['claude_model']) ? sanitize_text_field($input['claude_model']) : 'claude-3-5-sonnet-20241022',
             'unsplash_access_key' => isset($input['unsplash_access_key']) ? trim(sanitize_text_field($input['unsplash_access_key'])) : '',
             'pexels_api_key' => isset($input['pexels_api_key']) ? trim(sanitize_text_field($input['pexels_api_key'])) : '',
             'adobe_stock_api_key' => isset($input['adobe_stock_api_key']) ? trim(sanitize_text_field($input['adobe_stock_api_key'])) : '',
@@ -128,6 +134,11 @@ class WP_Summiteo {
             'translate_image_filenames' => !empty($input['translate_image_filenames']) ? '1' : '0',
             'update_manifest_url' => isset($input['update_manifest_url']) ? esc_url_raw(trim((string)$input['update_manifest_url'])) : self::section_defaults('general')['update_manifest_url'],
         ];
+    }
+
+    private function sanitize_ai_provider($provider) {
+        $provider = sanitize_key((string)$provider);
+        return in_array($provider, ['openai','claude'], true) ? $provider : 'openai';
     }
 
     private function sanitize_enabled_image_sources($sources) {
@@ -487,10 +498,10 @@ jQuery(function($){
 
   $('#summiteo-openai-test-btn').on('click', function(e){
     e.preventDefault();
-    log('Test de connexion OpenAI en cours...');
+    log('Test de connexion IA en cours...');
     summiteoRest('/test-openai', {})
       .done(function(resp){ log(resp); })
-      .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur test OpenAI'); });
+      .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur test IA'); });
   });
 });
 JS;
@@ -613,15 +624,24 @@ JS;
                     <?php settings_fields('wp_summiteo_general_group'); ?>
                     <div class="summiteo-row"><label>SEO title modèle</label><input class="large-text" name="<?php echo self::OPTION_GENERAL; ?>[seo_title_tpl]" value="<?php echo esc_attr($s['seo_title_tpl']); ?>"></div>
                     <div class="summiteo-row"><label>SEO description modèle</label><textarea class="large-text" rows="3" name="<?php echo self::OPTION_GENERAL; ?>[seo_desc_tpl]"><?php echo esc_textarea($s['seo_desc_tpl']); ?></textarea></div>
+                    <div class="summiteo-row"><label>Fournisseur IA</label><div>
+                        <select name="<?php echo self::OPTION_GENERAL; ?>[ai_provider]">
+                            <option value="openai" <?php selected($s['ai_provider'], 'openai'); ?>>OpenAI API</option>
+                            <option value="claude" <?php selected($s['ai_provider'], 'claude'); ?>>Claude API</option>
+                        </select>
+                        <p class="description">Fournisseur utilisé pour la réécriture de contenu et la traduction des noms/ALT d’images.</p>
+                    </div></div>
                     <div class="summiteo-row"><label>Clé API OpenAI</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[openai_api_key]" value="<?php echo esc_attr($s['openai_api_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>Modèle OpenAI</label><input class="regular-text" name="<?php echo self::OPTION_GENERAL; ?>[openai_model]" value="<?php echo esc_attr($s['openai_model']); ?>"></div>
-                    <div class="summiteo-row"><label>Connexion OpenAI</label><div><button id="summiteo-openai-test-btn" class="button" type="button">Tester la connexion API</button> <span class="description">Enregistre la clé avant de lancer le test.</span></div></div>
+                    <div class="summiteo-row"><label>Clé API Claude</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[claude_api_key]" value="<?php echo esc_attr($s['claude_api_key']); ?>" autocomplete="off"></div>
+                    <div class="summiteo-row"><label>Modèle Claude</label><input class="regular-text" name="<?php echo self::OPTION_GENERAL; ?>[claude_model]" value="<?php echo esc_attr($s['claude_model']); ?>"></div>
+                    <div class="summiteo-row"><label>Connexion IA</label><div><button id="summiteo-openai-test-btn" class="button" type="button">Tester la connexion API</button> <span class="description">Enregistre la clé du fournisseur sélectionné avant de lancer le test.</span></div></div>
                     <div class="summiteo-row"><label>Sources d’images actives</label><div>
                         <label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[enabled_image_sources][]" value="unsplash" <?php checked(in_array('unsplash', (array)$s['enabled_image_sources'], true)); ?>> Unsplash</label><br>
                         <label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[enabled_image_sources][]" value="pexels" <?php checked(in_array('pexels', (array)$s['enabled_image_sources'], true)); ?>> Pexels</label><br>
                         <label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[enabled_image_sources][]" value="adobe_stock" <?php checked(in_array('adobe_stock', (array)$s['enabled_image_sources'], true)); ?>> Adobe Stock</label>
                     </div></div>
-                    <div class="summiteo-row"><label>Traduire les images en français</label><div><label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[translate_image_filenames]" value="1" <?php checked($s['translate_image_filenames'], '1'); ?>> Traduire en français les noms de fichiers et balises ALT proposés</label><p class="description">Utilise OpenAI pendant la recherche d’images. Si aucune clé OpenAI n’est renseignée, le nom original est simplement nettoyé et localisé autant que possible.</p></div></div>
+                    <div class="summiteo-row"><label>Traduire les images en français</label><div><label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[translate_image_filenames]" value="1" <?php checked($s['translate_image_filenames'], '1'); ?>> Traduire en français les noms de fichiers et balises ALT proposés</label><p class="description">Utilise le fournisseur IA sélectionné pendant la recherche d’images. Si aucune clé compatible n’est renseignée, le nom original est simplement nettoyé et localisé autant que possible.</p></div></div>
                     <div class="summiteo-row"><label>Clé API Unsplash</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[unsplash_access_key]" value="<?php echo esc_attr($s['unsplash_access_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>Clé API Pexels</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[pexels_api_key]" value="<?php echo esc_attr($s['pexels_api_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>Clé API Adobe Stock</label><div><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[adobe_stock_api_key]" value="<?php echo esc_attr($s['adobe_stock_api_key']); ?>" autocomplete="off"><p class="description">La recherche Adobe Stock retourne des aperçus. Le téléchargement sans watermark nécessite le workflow de licence Adobe.</p></div></div>
@@ -717,7 +737,7 @@ JS;
     public function can_use_openai() {
         $read = $this->can_read();
         if (is_wp_error($read)) return $read;
-        if (!current_user_can('manage_options')) return new WP_Error('summiteo_openai_forbidden', 'La génération OpenAI est réservée aux administrateurs.', ['status'=>403]);
+        if (!current_user_can('manage_options')) return new WP_Error('summiteo_ai_forbidden', 'La génération IA est réservée aux administrateurs.', ['status'=>403]);
         return true;
     }
 
@@ -725,10 +745,12 @@ JS;
     public function rest_config() {
         $config = self::settings();
         $config['has_openai_api_key'] = !empty($config['openai_api_key']);
+        $config['has_claude_api_key'] = !empty($config['claude_api_key']);
         $config['has_unsplash_access_key'] = !empty($config['unsplash_access_key']);
         $config['has_pexels_api_key'] = !empty($config['pexels_api_key']);
         $config['has_adobe_stock_api_key'] = !empty($config['adobe_stock_api_key']);
         unset($config['openai_api_key']);
+        unset($config['claude_api_key']);
         unset($config['unsplash_access_key']);
         unset($config['pexels_api_key']);
         unset($config['adobe_stock_api_key']);
@@ -1340,11 +1362,11 @@ JS;
             $labels[] = $this->stock_photo_label($photo);
         }
         $translated = [];
-        if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1' && !empty($settings['openai_api_key'])) {
+        if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1' && $this->has_ai_api_key($settings)) {
             $translated = $this->translate_stock_filename_labels($labels, $settings);
         }
         $translated_alt = [];
-        if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1' && !empty($settings['openai_api_key'])) {
+        if (!empty($settings['translate_image_filenames']) && $settings['translate_image_filenames'] === '1' && $this->has_ai_api_key($settings)) {
             $translated_alt = $this->translate_stock_alt_labels($labels, $settings);
         }
         foreach ($photos as $index => $photo) {
@@ -1431,24 +1453,9 @@ JS;
             "Si un titre contient deja une requete en francais, reformule-la en nom de fichier court et naturel.\n" .
             "Retourne uniquement un tableau JSON de chaines, dans le meme ordre, avec exactement " . count($labels) . " elements.\n" .
             "Titres :\n" . wp_json_encode($labels, JSON_UNESCAPED_UNICODE);
-        $response = wp_remote_post('https://api.openai.com/v1/responses', [
-            'timeout' => 30,
-            'headers' => [
-                'Authorization' => 'Bearer ' . $settings['openai_api_key'],
-                'Content-Type' => 'application/json',
-            ],
-            'body' => wp_json_encode([
-                'model' => $settings['openai_model'] ?: 'gpt-4.1-mini',
-                'input' => $prompt,
-                'temperature' => 0,
-                'max_output_tokens' => 1200,
-            ]),
-        ]);
-        if (is_wp_error($response)) return [];
-        $code = wp_remote_retrieve_response_code($response);
-        if ($code < 200 || $code >= 300) return [];
-        $json = json_decode(wp_remote_retrieve_body($response), true);
-        $text = trim($this->extract_openai_text($json));
+        $text = $this->call_ai_text($prompt, $settings, ['timeout'=>30, 'temperature'=>0, 'max_tokens'=>1200]);
+        if (is_wp_error($text)) return [];
+        $text = trim((string)$text);
         $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
         $text = preg_replace('/\s*```$/', '', $text);
         $translations = $this->parse_translation_list($text);
@@ -1467,24 +1474,9 @@ JS;
             "Si le titre est deja en francais, nettoie seulement les prefixes parasites et conserve une phrase naturelle.\n" .
             "Retourne uniquement un tableau JSON de chaines, dans le meme ordre, avec exactement " . count($labels) . " elements.\n" .
             "Titres :\n" . wp_json_encode($labels, JSON_UNESCAPED_UNICODE);
-        $response = wp_remote_post('https://api.openai.com/v1/responses', [
-            'timeout' => 30,
-            'headers' => [
-                'Authorization' => 'Bearer ' . $settings['openai_api_key'],
-                'Content-Type' => 'application/json',
-            ],
-            'body' => wp_json_encode([
-                'model' => $settings['openai_model'] ?: 'gpt-4.1-mini',
-                'input' => $prompt,
-                'temperature' => 0,
-                'max_output_tokens' => 1600,
-            ]),
-        ]);
-        if (is_wp_error($response)) return [];
-        $code = wp_remote_retrieve_response_code($response);
-        if ($code < 200 || $code >= 300) return [];
-        $json = json_decode(wp_remote_retrieve_body($response), true);
-        $text = trim($this->extract_openai_text($json));
+        $text = $this->call_ai_text($prompt, $settings, ['timeout'=>30, 'temperature'=>0, 'max_tokens'=>1600]);
+        if (is_wp_error($text)) return [];
+        $text = trim((string)$text);
         $text = preg_replace('/^```(?:json)?\s*/i', '', $text);
         $text = preg_replace('/\s*```$/', '', $text);
         $translations = $this->parse_translation_list($text);
@@ -2166,39 +2158,20 @@ JS;
 
     public function rest_test_openai(WP_REST_Request $r) {
         $s = self::settings();
-        if (empty($s['openai_api_key'])) {
-            return new WP_Error('summiteo_openai_key_missing', 'Clé API OpenAI absente.', ['status'=>400]);
+        $provider = $this->selected_ai_provider($s);
+        if (!$this->has_ai_api_key($s)) {
+            $label = $provider === 'claude' ? 'Claude' : 'OpenAI';
+            return new WP_Error('summiteo_ai_key_missing', 'Clé API ' . $label . ' absente.', ['status'=>400, 'provider'=>$provider]);
         }
         $started = microtime(true);
-        $response = wp_remote_post('https://api.openai.com/v1/responses', [
-            'timeout' => 15,
-            'headers' => [
-                'Authorization' => 'Bearer ' . $s['openai_api_key'],
-                'Content-Type' => 'application/json',
-            ],
-            'body' => wp_json_encode([
-                'model' => $s['openai_model'] ?: 'gpt-4.1-mini',
-                'input' => 'Réponds uniquement: OK',
-                'temperature' => 0,
-                'max_output_tokens' => 16,
-            ]),
-        ]);
+        $text = $this->call_ai_text('Réponds uniquement: OK', $s, ['timeout'=>15, 'temperature'=>0, 'max_tokens'=>32]);
         $elapsed_ms = (int) round((microtime(true) - $started) * 1000);
-        if (is_wp_error($response)) {
-            return new WP_Error('summiteo_openai_network_error', 'Erreur réseau OpenAI : ' . $response->get_error_message(), ['status'=>502, 'elapsed_ms'=>$elapsed_ms]);
-        }
-        $code = wp_remote_retrieve_response_code($response);
-        $body = wp_remote_retrieve_body($response);
-        $json = json_decode($body, true);
-        $text = $this->extract_openai_text($json);
-        if ($code < 200 || $code >= 300) {
-            $message = is_array($json) && isset($json['error']['message']) ? $json['error']['message'] : $body;
-            return new WP_Error('summiteo_openai_http_error', 'Erreur OpenAI HTTP ' . $code . ' : ' . $message, ['status'=>502, 'openai_status'=>$code, 'elapsed_ms'=>$elapsed_ms]);
-        }
+        if (is_wp_error($text)) return $text;
         return [
             'success' => true,
-            'message' => 'Connexion OpenAI OK.',
-            'model' => $s['openai_model'] ?: 'gpt-4.1-mini',
+            'message' => 'Connexion IA OK.',
+            'provider' => $provider,
+            'model' => $provider === 'claude' ? ($s['claude_model'] ?: 'claude-3-5-sonnet-20241022') : ($s['openai_model'] ?: 'gpt-4.1-mini'),
             'elapsed_ms' => $elapsed_ms,
             'response_text' => $text,
         ];
@@ -2425,7 +2398,11 @@ JS;
         $post = get_post($page_id);
         if (!$post) return new WP_Error('summiteo_not_found', 'Page introuvable.', ['status'=>404]);
         $s = self::settings();
-        if (empty($s['openai_api_key'])) return new WP_Error('openai_disabled', 'La clé API OpenAI est absente.', ['status'=>403]);
+        if (!$this->has_ai_api_key($s)) {
+            $provider = $this->selected_ai_provider($s);
+            $label = $provider === 'claude' ? 'Claude' : 'OpenAI';
+            return new WP_Error('ai_disabled', 'La clé API ' . $label . ' est absente.', ['status'=>403, 'provider'=>$provider]);
+        }
         $respect_length = !empty($s['respect_text_length']) && $s['respect_text_length'] === '1';
         if ($apply) {
             $can = $this->can_write();
@@ -2580,7 +2557,7 @@ JS;
                     "Le texte précédent fait {$best_len} caractères visibles. Ne change pas le sens, ne change pas la structure HTML.";
             }
 
-            $text = $this->call_openai_text($prompt, $settings);
+            $text = $this->call_ai_text($prompt, $settings);
             if (is_wp_error($text)) return $text;
             $text = $this->normalise_ai_html($text);
             if (trim(wp_strip_all_tags($text)) === '') continue;
@@ -2666,14 +2643,41 @@ JS;
             "Texte source original :\n" . $original_html . "\n\n" .
             "Texte a corriger :\n" . $candidate_html;
 
-        $text = $this->call_openai_text($prompt, $settings);
+        $text = $this->call_ai_text($prompt, $settings);
         if (is_wp_error($text)) return $text;
         return $this->normalise_ai_html($text);
     }
 
-    private function call_openai_text($prompt, $settings) {
+    private function selected_ai_provider($settings) {
+        $provider = sanitize_key((string)($settings['ai_provider'] ?? 'openai'));
+        return in_array($provider, ['openai','claude'], true) ? $provider : 'openai';
+    }
+
+    private function has_ai_api_key($settings) {
+        $provider = $this->selected_ai_provider($settings);
+        if ($provider === 'claude') {
+            return !empty($settings['claude_api_key']);
+        }
+        return !empty($settings['openai_api_key']);
+    }
+
+    private function call_ai_text($prompt, $settings, $args = []) {
+        $provider = $this->selected_ai_provider($settings);
+        if ($provider === 'claude') {
+            return $this->call_claude_text($prompt, $settings, $args);
+        }
+        return $this->call_openai_text($prompt, $settings, $args);
+    }
+
+    private function call_openai_text($prompt, $settings, $args = []) {
+        if (empty($settings['openai_api_key'])) {
+            return new WP_Error('openai_disabled', 'La clé API OpenAI est absente.', ['status'=>403]);
+        }
+        $timeout = isset($args['timeout']) ? absint($args['timeout']) : 90;
+        $temperature = isset($args['temperature']) ? (float)$args['temperature'] : 0.1;
+        $max_tokens = isset($args['max_tokens']) ? absint($args['max_tokens']) : 6000;
         $response = wp_remote_post('https://api.openai.com/v1/responses', [
-            'timeout' => 90,
+            'timeout' => $timeout,
             'headers' => [
                 'Authorization' => 'Bearer ' . $settings['openai_api_key'],
                 'Content-Type' => 'application/json',
@@ -2681,8 +2685,8 @@ JS;
             'body' => wp_json_encode([
                 'model' => $settings['openai_model'] ?: 'gpt-4.1-mini',
                 'input' => $prompt,
-                'temperature' => 0.1,
-                'max_output_tokens' => 6000,
+                'temperature' => $temperature,
+                'max_output_tokens' => $max_tokens,
             ]),
         ]);
         if (is_wp_error($response)) return $response;
@@ -2692,6 +2696,39 @@ JS;
         $json = json_decode($body, true);
         $text = $this->extract_openai_text($json);
         if ($text === '') return new WP_Error('openai_empty', 'Réponse OpenAI vide ou illisible.', ['status'=>502]);
+        return $text;
+    }
+
+    private function call_claude_text($prompt, $settings, $args = []) {
+        if (empty($settings['claude_api_key'])) {
+            return new WP_Error('claude_disabled', 'La clé API Claude est absente.', ['status'=>403]);
+        }
+        $timeout = isset($args['timeout']) ? absint($args['timeout']) : 90;
+        $temperature = isset($args['temperature']) ? (float)$args['temperature'] : 0.1;
+        $max_tokens = isset($args['max_tokens']) ? absint($args['max_tokens']) : 6000;
+        $response = wp_remote_post('https://api.anthropic.com/v1/messages', [
+            'timeout' => $timeout,
+            'headers' => [
+                'x-api-key' => $settings['claude_api_key'],
+                'anthropic-version' => '2023-06-01',
+                'Content-Type' => 'application/json',
+            ],
+            'body' => wp_json_encode([
+                'model' => $settings['claude_model'] ?: 'claude-3-5-sonnet-20241022',
+                'max_tokens' => $max_tokens,
+                'temperature' => $temperature,
+                'messages' => [
+                    ['role' => 'user', 'content' => $prompt],
+                ],
+            ]),
+        ]);
+        if (is_wp_error($response)) return $response;
+        $code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        if ($code < 200 || $code >= 300) return new WP_Error('claude_error', 'Erreur Claude : ' . $body, ['status'=>502]);
+        $json = json_decode($body, true);
+        $text = $this->extract_claude_text($json);
+        if ($text === '') return new WP_Error('claude_empty', 'Réponse Claude vide ou illisible.', ['status'=>502]);
         return $text;
     }
 
@@ -2766,6 +2803,20 @@ JS;
                     foreach ($item['content'] as $content) {
                         if (isset($content['text']) && is_string($content['text'])) $parts[] = $content['text'];
                     }
+                }
+            }
+            return trim(implode("\n", $parts));
+        }
+        return '';
+    }
+
+    private function extract_claude_text($json) {
+        if (!is_array($json)) return '';
+        if (!empty($json['content']) && is_array($json['content'])) {
+            $parts = [];
+            foreach ($json['content'] as $content) {
+                if (isset($content['text']) && is_string($content['text'])) {
+                    $parts[] = $content['text'];
                 }
             }
             return trim(implode("\n", $parts));
