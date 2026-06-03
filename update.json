@@ -1,7 +1,7 @@
 {
   "name": "WP Summiteo",
-  "version": "77.0.0",
-  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v77-wordpress.zip",
+  "version": "78.0.0",
+  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v78-wordpress.zip",
   "update_uri": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json",
   "homepage": "https://github.com/tanaka38/wp-summiteo",
   "author": "Summiteo",
@@ -10,5 +10,5 @@
   "requires_php": "7.4",
   "last_updated": "2026-06-03",
   "description": "Plugin metier WP Summiteo pour cloner et adapter des pages WordPress, Elementor et Avia Builder.",
-  "changelog": "<h4>77.0.0</h4><ul><li>Ajout du choix de fournisseur IA dans les reglages : OpenAI API ou Claude API.</li><li>Ajout des champs Cle API Claude et Modele Claude.</li><li>La reecriture de contenu utilise maintenant le fournisseur IA selectionne.</li><li>La traduction des noms de fichiers et balises ALT d'images utilise aussi le fournisseur IA selectionne.</li><li>Le bouton de test de connexion API teste maintenant le fournisseur choisi.</li></ul><h4>76.0.0</h4><ul><li>Separation complete de la generation du nom de fichier et de la balise ALT.</li><li>La balise ALT utilise maintenant une traduction dediee qui conserve le titre complet, les determinants, les accents et les espaces.</li><li>Suppression des underscores residuels dans les balises ALT proposees.</li><li>Le nettoyage Pexels conserve le titre restant sous forme de phrase lisible.</li></ul>"
+  "changelog": "<h4>78.0.0</h4><ul><li>Le modele Claude par defaut passe a Claude Opus 4.1.</li><li>Utilisation de l'identifiant API Anthropic claude-opus-4-1-20250805.</li><li>Migration automatique de l'ancien modele Claude par defaut vers Opus 4.1.</li></ul><h4>77.0.0</h4><ul><li>Ajout du choix de fournisseur IA dans les reglages : OpenAI API ou Claude API.</li><li>Ajout des champs Cle API Claude et Modele Claude.</li><li>La reecriture de contenu utilise maintenant le fournisseur IA selectionne.</li><li>La traduction des noms de fichiers et balises ALT d'images utilise aussi le fournisseur IA selectionne.</li><li>Le bouton de test de connexion API teste maintenant le fournisseur choisi.</li></ul>"
 }

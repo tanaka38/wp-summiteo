@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
- * Version: 77.0.0
+ * Version: 78.0.0
  * Author: Summiteo
  * Update URI: https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '77.0.0';
+    const VERSION = '78.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -44,7 +44,7 @@ class WP_Summiteo {
                 'openai_api_key' => '',
                 'openai_model' => 'gpt-4.1-mini',
                 'claude_api_key' => '',
-                'claude_model' => 'claude-3-5-sonnet-20241022',
+                'claude_model' => 'claude-opus-4-1-20250805',
                 'unsplash_access_key' => '',
                 'pexels_api_key' => '',
                 'adobe_stock_api_key' => '',
@@ -94,6 +94,10 @@ class WP_Summiteo {
             $general['update_manifest_url'] = self::section_defaults('general')['update_manifest_url'];
             update_option(self::OPTION_GENERAL, $general, false);
         }
+        if (!empty($general['claude_model']) && $general['claude_model'] === 'claude-3-5-sonnet-20241022') {
+            $general['claude_model'] = self::section_defaults('general')['claude_model'];
+            update_option(self::OPTION_GENERAL, $general, false);
+        }
         $general['openai_enabled'] = '1';
         $clone = wp_parse_args(get_option(self::OPTION_CLONE, []), self::section_defaults('clone'));
         $ai = wp_parse_args(get_option(self::OPTION_AI, []), self::section_defaults('ai'));
@@ -126,7 +130,7 @@ class WP_Summiteo {
             'openai_api_key' => isset($input['openai_api_key']) ? trim(sanitize_text_field($input['openai_api_key'])) : '',
             'openai_model' => isset($input['openai_model']) ? sanitize_text_field($input['openai_model']) : 'gpt-4.1-mini',
             'claude_api_key' => isset($input['claude_api_key']) ? trim(sanitize_text_field($input['claude_api_key'])) : '',
-            'claude_model' => isset($input['claude_model']) ? sanitize_text_field($input['claude_model']) : 'claude-3-5-sonnet-20241022',
+            'claude_model' => isset($input['claude_model']) ? sanitize_text_field($input['claude_model']) : 'claude-opus-4-1-20250805',
             'unsplash_access_key' => isset($input['unsplash_access_key']) ? trim(sanitize_text_field($input['unsplash_access_key'])) : '',
             'pexels_api_key' => isset($input['pexels_api_key']) ? trim(sanitize_text_field($input['pexels_api_key'])) : '',
             'adobe_stock_api_key' => isset($input['adobe_stock_api_key']) ? trim(sanitize_text_field($input['adobe_stock_api_key'])) : '',
@@ -634,7 +638,7 @@ JS;
                     <div class="summiteo-row"><label>Clé API OpenAI</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[openai_api_key]" value="<?php echo esc_attr($s['openai_api_key']); ?>" autocomplete="off"></div>
                     <div class="summiteo-row"><label>Modèle OpenAI</label><input class="regular-text" name="<?php echo self::OPTION_GENERAL; ?>[openai_model]" value="<?php echo esc_attr($s['openai_model']); ?>"></div>
                     <div class="summiteo-row"><label>Clé API Claude</label><input class="large-text" type="password" name="<?php echo self::OPTION_GENERAL; ?>[claude_api_key]" value="<?php echo esc_attr($s['claude_api_key']); ?>" autocomplete="off"></div>
-                    <div class="summiteo-row"><label>Modèle Claude</label><input class="regular-text" name="<?php echo self::OPTION_GENERAL; ?>[claude_model]" value="<?php echo esc_attr($s['claude_model']); ?>"></div>
+                    <div class="summiteo-row"><label>Modèle Claude</label><div><input class="regular-text" name="<?php echo self::OPTION_GENERAL; ?>[claude_model]" value="<?php echo esc_attr($s['claude_model']); ?>"><p class="description">Par défaut : Claude Opus 4.1 (<code>claude-opus-4-1-20250805</code>).</p></div></div>
                     <div class="summiteo-row"><label>Connexion IA</label><div><button id="summiteo-openai-test-btn" class="button" type="button">Tester la connexion API</button> <span class="description">Enregistre la clé du fournisseur sélectionné avant de lancer le test.</span></div></div>
                     <div class="summiteo-row"><label>Sources d’images actives</label><div>
                         <label><input type="checkbox" name="<?php echo self::OPTION_GENERAL; ?>[enabled_image_sources][]" value="unsplash" <?php checked(in_array('unsplash', (array)$s['enabled_image_sources'], true)); ?>> Unsplash</label><br>
@@ -2171,7 +2175,7 @@ JS;
             'success' => true,
             'message' => 'Connexion IA OK.',
             'provider' => $provider,
-            'model' => $provider === 'claude' ? ($s['claude_model'] ?: 'claude-3-5-sonnet-20241022') : ($s['openai_model'] ?: 'gpt-4.1-mini'),
+            'model' => $provider === 'claude' ? ($s['claude_model'] ?: 'claude-opus-4-1-20250805') : ($s['openai_model'] ?: 'gpt-4.1-mini'),
             'elapsed_ms' => $elapsed_ms,
             'response_text' => $text,
         ];
@@ -2714,7 +2718,7 @@ JS;
                 'Content-Type' => 'application/json',
             ],
             'body' => wp_json_encode([
-                'model' => $settings['claude_model'] ?: 'claude-3-5-sonnet-20241022',
+                'model' => $settings['claude_model'] ?: 'claude-opus-4-1-20250805',
                 'max_tokens' => $max_tokens,
                 'temperature' => $temperature,
                 'messages' => [
