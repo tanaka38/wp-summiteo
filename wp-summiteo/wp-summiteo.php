@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
- * Version: 78.0.0
+ * Version: 79.0.0
  * Author: Summiteo
  * Update URI: https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '78.0.0';
+    const VERSION = '79.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -2563,7 +2563,7 @@ JS;
 
             $text = $this->call_ai_text($prompt, $settings);
             if (is_wp_error($text)) return $text;
-            $text = $this->normalise_ai_html($text);
+            $text = $this->normalise_rewrite_for_block($text, $block);
             if (trim(wp_strip_all_tags($text)) === '') continue;
 
             $check = $this->length_check($original_html, $text);
@@ -2607,6 +2607,10 @@ JS;
         $content_label = (($block['widget_type'] ?? '') === 'avia-content') ? 'un texte Avia Builder' : ((($block['widget_type'] ?? '') === 'classic-content') ? 'un contenu WordPress classique' : 'un bloc Elementor');
         $attribute_rule = !empty($block['attribute']) ? "ATTRIBUT AVIA : ce texte sera réinjecté dans un attribut de shortcode. Réponds en texte brut uniquement, sans balise HTML, sans guillemet ouvrant/fermant, sans markdown.\n" : '';
         $respect_length = !empty($settings['respect_text_length']) && $settings['respect_text_length'] === '1';
+        $field = (string)($block['field'] ?? '');
+        $heading_rule = $this->is_elementor_heading_field($block)
+            ? "CHAMP TITRE ELEMENTOR : réponds avec un seul titre, sans balise <p>, sans <div>, sans wrapper, sans phrase d'introduction. Conserve uniquement les balises inline déjà utiles comme <br> ou <strong> si nécessaire.\n"
+            : '';
         $length_rule = $respect_length
             ? "LONGUEUR IMPÉRATIVE : le texte réécrit doit avoir une longueur très proche du texte source pour ne pas casser la mise en page Elementor.\n" .
                 "Texte source hors balises : {$old_len} caractères. Cible prioritaire : {$bounds['target']} caractères visibles. Fourchette acceptée : {$bounds['min']} à {$bounds['max']} caractères visibles.\n" .
@@ -2617,6 +2621,7 @@ JS;
         return "Tu réécris {$content_label} pour un contenu WordPress.\n" .
             "Objectif : améliorer la clarté, le naturel et la qualité éditoriale sans inventer de contexte métier absent du texte source.\n" .
             $attribute_rule .
+            $heading_rule .
             "Préserve les balises HTML utiles existantes comme <p>, <strong>, <br>. Ne renvoie que le HTML final du bloc, sans commentaire, sans markdown.\n" .
             "STRUCTURE STRICTE : conserve le même nombre de paragraphes et de retours ligne que le bloc source. Paragraphes source : {$profile['p_count']}. BR source : {$profile['br_count']}. Si le bloc source n'a pas de balise <p>, n'ajoute pas de balise <p>.\n" .
             "N'ajoute pas de deuxième paragraphe, pas de nouvelle commune, pas de quartier, pas d'exemple produit supplémentaire, sauf si c'est déjà présent dans le texte source.\n" .
@@ -2625,7 +2630,7 @@ JS;
             $strict . "\n" .
             $brief_section .
             "Type de widget : " . ($block['widget_type'] ?? '') . "\n" .
-            "Champ : " . ($block['field'] ?? '') . "\n" .
+            "Champ : " . $field . "\n" .
             "Texte actuel :\n" . ($block['text'] ?? '');
     }
 
@@ -2649,7 +2654,7 @@ JS;
 
         $text = $this->call_ai_text($prompt, $settings);
         if (is_wp_error($text)) return $text;
-        return $this->normalise_ai_html($text);
+        return $this->normalise_rewrite_for_block($text, $block);
     }
 
     private function selected_ai_provider($settings) {
@@ -2740,6 +2745,46 @@ JS;
         $text = preg_replace('/^```(?:html)?\s*/i', '', trim((string)$text));
         $text = preg_replace('/\s*```$/', '', $text);
         return $this->clean_html($text);
+    }
+
+    private function normalise_rewrite_for_block($text, $block) {
+        $text = $this->normalise_ai_html($text);
+        if ($this->is_elementor_heading_field($block)) {
+            return $this->normalise_elementor_heading_text($text, (string)($block['text'] ?? ''));
+        }
+        return $text;
+    }
+
+    private function is_elementor_heading_field($block) {
+        $field = (string)($block['field'] ?? '');
+        $widget_type = (string)($block['widget_type'] ?? '');
+        if (in_array($field, ['title','heading_title','title_text'], true)) {
+            return !in_array($widget_type, ['text-editor','classic-content','avia-content'], true);
+        }
+        return false;
+    }
+
+    private function normalise_elementor_heading_text($text, $original_text = '') {
+        $text = preg_replace('/^```(?:html)?\s*/i', '', trim((string)$text));
+        $text = preg_replace('/\s*```$/', '', $text);
+        $text = preg_replace('/<\/(?:p|div|h[1-6])>\s*<(?=p|div|h[1-6]\b)/i', '<br>', $text);
+        $text = preg_replace('/<\/?(?:p|div|h[1-6])[^>]*>/i', '', $text);
+        $allowed = [
+            'br' => [],
+            'strong' => [],
+            'b' => [],
+            'em' => [],
+            'i' => [],
+            'span' => ['class'=>true],
+        ];
+        $text = wp_kses($text, $allowed);
+        $text = preg_replace('/(?:\s*<br\s*\/?>\s*){3,}/i', '<br><br>', $text);
+        $text = preg_replace('/\s+/', ' ', trim($text));
+        if (stripos((string)$original_text, '<br') === false) {
+            $text = preg_replace('/\s*<br\s*\/?>\s*/i', ' ', $text);
+            $text = preg_replace('/\s+/', ' ', trim($text));
+        }
+        return $text;
     }
 
     private function html_profile($html) {
