@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
- * Version: 80.0.0
+ * Version: 81.0.0
  * Author: Summiteo
  * Update URI: https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '80.0.0';
+    const VERSION = '81.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -218,13 +218,37 @@ jQuery(function($){
   const restNonce = '{$rest_nonce}';
   const restRoot = '{$rest_root}';
   const replacementPairs = {$replacement_pairs};
+  const tabStorageKey = 'wpSummiteoActiveTab';
   function log(msg){ $('#summiteo-log').text(typeof msg === 'string' ? msg : JSON.stringify(msg,null,2)); }
-  $('.summiteo-tab').on('click', function(){
-    const tab = $(this).data('tab');
+  function activateSummiteoTab(tab, persist){
+    const target = $('#summiteo-tab-' + tab);
+    const button = $('.summiteo-tab[data-tab="' + tab + '"]');
+    if(!target.length || !button.length){ tab = 'dashboard'; }
     $('.summiteo-tab').removeClass('is-active').attr('aria-selected', 'false');
-    $(this).addClass('is-active').attr('aria-selected', 'true');
+    $('.summiteo-tab[data-tab="' + tab + '"]').addClass('is-active').attr('aria-selected', 'true');
     $('.summiteo-tab-panel').removeClass('is-active');
     $('#summiteo-tab-' + tab).addClass('is-active');
+    if(persist !== false){
+      try { window.localStorage.setItem(tabStorageKey, tab); } catch(e) {}
+      if(window.history && window.history.replaceState){ window.history.replaceState(null, '', '#'+tab); }
+    }
+  }
+  function initialSummiteoTab(){
+    const hash = (window.location.hash || '').replace(/^#/, '');
+    if(hash && $('.summiteo-tab[data-tab="' + hash + '"]').length){ return hash; }
+    try {
+      const stored = window.localStorage.getItem(tabStorageKey);
+      if(stored && $('.summiteo-tab[data-tab="' + stored + '"]').length){ return stored; }
+    } catch(e) {}
+    return 'dashboard';
+  }
+  activateSummiteoTab(initialSummiteoTab(), false);
+  $('.summiteo-tab').on('click', function(){
+    activateSummiteoTab($(this).data('tab'));
+  });
+  $('.summiteo-tab-panel form').on('submit', function(){
+    const tab = $(this).closest('.summiteo-tab-panel').attr('id').replace('summiteo-tab-', '');
+    try { window.localStorage.setItem(tabStorageKey, tab); } catch(e) {}
   });
   function slugify(value){
     return String(value || '')
