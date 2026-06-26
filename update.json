@@ -1,14 +1,14 @@
 {
   "name": "WP Summiteo",
-  "version": "81.0.0",
-  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v81-wordpress.zip",
+  "version": "82.0.0",
+  "download_url": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/releases/wp-summiteo-v82-wordpress.zip",
   "update_uri": "https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json",
   "homepage": "https://github.com/tanaka38/wp-summiteo",
   "author": "Summiteo",
   "requires": "6.0",
   "tested": "6.8",
   "requires_php": "7.4",
-  "last_updated": "2026-06-09",
+  "last_updated": "2026-06-26",
   "description": "Plugin metier WP Summiteo pour cloner et adapter des pages WordPress, Elementor et Avia Builder.",
-  "changelog": "<h4>81.0.0</h4><ul><li>Correction du retour automatique sur l'onglet Tableau de bord apres enregistrement des reglages.</li><li>L'onglet actif est maintenant memorise et restaure apres le rechargement de l'administration.</li><li>Ajout du support du hash d'URL pour ouvrir directement un onglet.</li></ul><h4>80.0.0</h4><ul><li>Correction de l'appel Claude API pour les modeles qui refusent le parametre temperature.</li><li>Les requetes Claude n'envoient plus temperature ; OpenAI conserve son propre parametre.</li></ul>"
+  "changelog": "<h4>82.0.0</h4><ul><li>Ajout d'un onglet Donnees structurees pour gerer un JSON-LD par page ou article.</li><li>Stockage du JSON-LD en meta WordPress et injection automatique dans le head du contenu cible.</li><li>Ajout d'une validation JSON-LD cote interface et cote serveur avant sauvegarde.</li></ul><h4>81.0.0</h4><ul><li>Correction du retour automatique sur l'onglet Tableau de bord apres enregistrement des reglages.</li><li>L'onglet actif est maintenant memorise et restaure apres le rechargement de l'administration.</li><li>Ajout du support du hash d'URL pour ouvrir directement un onglet.</li></ul>"
 }

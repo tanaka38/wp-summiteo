@@ -2,7 +2,7 @@
 /**
  * Plugin Name: WP Summiteo
  * Description: Connecteur métier sécurisé pour cloner, adapter et enrichir des contenus WordPress avec l’IA.
- * Version: 81.0.0
+ * Version: 82.0.0
  * Author: Summiteo
  * Update URI: https://raw.githubusercontent.com/tanaka38/wp-summiteo/main/update.json
  */
@@ -10,7 +10,7 @@
 if (!defined('ABSPATH')) { exit; }
 
 class WP_Summiteo {
-    const VERSION = '81.0.0';
+    const VERSION = '82.0.0';
     const OPTION = 'wp_summiteo_settings';
     const OPTION_GENERAL = 'wp_summiteo_general_settings';
     const OPTION_CLONE = 'wp_summiteo_clone_settings';
@@ -19,6 +19,9 @@ class WP_Summiteo {
     const OPTION_PLATFORM = 'wp_summiteo_platform_settings';
     const LEGACY_OPTION = 'goldinfo_ai_connector_settings';
     const NS = 'wp-summiteo/v1';
+    const META_SCHEMA_ENABLED = '_wp_summiteo_schema_enabled';
+    const META_SCHEMA_TYPE = '_wp_summiteo_schema_type';
+    const META_SCHEMA_JSONLD = '_wp_summiteo_schema_jsonld';
 
     public function __construct() {
         add_action('admin_menu', [$this, 'admin_menu']);
@@ -27,6 +30,7 @@ class WP_Summiteo {
         add_action('wp_ajax_wp_summiteo_search_pages', [$this, 'ajax_search_pages']);
         add_action('wp_ajax_wp_summiteo_admin_clone_page', [$this, 'ajax_admin_clone_page']);
         add_action('rest_api_init', [$this, 'register_routes']);
+        add_action('wp_head', [$this, 'print_structured_data_jsonld'], 20);
         add_filter('pre_set_site_transient_update_plugins', [$this, 'filter_update_plugins']);
         add_filter('site_transient_update_plugins', [$this, 'filter_update_plugins']);
         add_filter('pre_set_transient_update_plugins', [$this, 'filter_update_plugins']);
@@ -524,6 +528,96 @@ jQuery(function($){
       .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur synchronisation Avia'); });
   });
 
+  function parseSchemaJson(){
+    const raw = $('#schema_jsonld').val();
+    if(!raw || !raw.trim()){ throw new Error('Le champ JSON-LD est vide.'); }
+    const parsed = JSON.parse(raw);
+    const first = Array.isArray(parsed) ? parsed[0] : parsed;
+    const graph = first && first['@graph'] && first['@graph'][0] ? first['@graph'][0] : first;
+    if(!graph || typeof graph !== 'object'){ throw new Error('Le JSON-LD doit contenir un objet.'); }
+    if(!graph['@context'] && !first['@context']){ throw new Error('Le champ @context est manquant.'); }
+    if(!graph['@type']){ throw new Error('Le champ @type est manquant.'); }
+    return parsed;
+  }
+  function schemaTemplate(type){
+    const origin = window.location.origin || '';
+    const base = {'@context':'https://schema.org','@type':type,'name':'','url':origin};
+    if(type === 'RealEstateAgent'){
+      return Object.assign(base, {
+        telephone:'',
+        areaServed:'',
+        address:{'@type':'PostalAddress', streetAddress:'', addressLocality:'', postalCode:'', addressCountry:'FR'}
+      });
+    }
+    if(type === 'Article'){
+      return Object.assign(base, {headline:'', description:'', author:{'@type':'Organization','name':''}, datePublished:''});
+    }
+    if(type === 'FAQPage'){
+      return {'@context':'https://schema.org','@type':'FAQPage','mainEntity':[{'@type':'Question','name':'','acceptedAnswer':{'@type':'Answer','text':''}}]};
+    }
+    if(type === 'BreadcrumbList'){
+      return {'@context':'https://schema.org','@type':'BreadcrumbList','itemListElement':[{'@type':'ListItem','position':1,'name':'Accueil','item':origin}]};
+    }
+    if(type === 'Service'){
+      return Object.assign(base, {serviceType:'', areaServed:'', provider:{'@type':'Organization','name':''}});
+    }
+    if(type === 'Product'){
+      return Object.assign(base, {description:'', brand:{'@type':'Brand','name':''}});
+    }
+    return base;
+  }
+  $('#summiteo-schema-template-btn').on('click', function(e){
+    e.preventDefault();
+    const type = $('#schema_type').val() || 'LocalBusiness';
+    $('#schema_jsonld').val(JSON.stringify(schemaTemplate(type), null, 2));
+    log('Modèle JSON-LD généré. Complète les champs avant enregistrement.');
+  });
+  $('#summiteo-schema-validate-btn').on('click', function(e){
+    e.preventDefault();
+    try {
+      const parsed = parseSchemaJson();
+      log({success:true, message:'JSON-LD valide.', jsonld:parsed});
+    } catch(err) {
+      log({success:false, message:err.message});
+    }
+  });
+  $('#summiteo-schema-load-btn').on('click', function(e){
+    e.preventDefault();
+    const pageId = $('#schema_page_id').val() || $('#ai_page_id').val();
+    if(!pageId){ alert('Indique l\'ID de la page ou de l’article à charger.'); return; }
+    $('#schema_page_id').val(pageId);
+    log('Chargement des données structurées...');
+    summiteoRest('/schema-get', {id:pageId})
+      .done(function(resp){
+        $('#schema_type').val(resp.schema_type || 'LocalBusiness');
+        $('#schema_enabled').prop('checked', resp.enabled !== false && resp.enabled !== '0');
+        $('#schema_jsonld').val(resp.jsonld || '');
+        log(resp);
+      })
+      .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur chargement JSON-LD'); });
+  });
+  $('#summiteo-schema-save-btn').on('click', function(e){
+    e.preventDefault();
+    const pageId = $('#schema_page_id').val() || $('#ai_page_id').val();
+    if(!pageId){ alert('Indique l\'ID de la page ou de l’article à enregistrer.'); return; }
+    let parsed;
+    try {
+      parsed = parseSchemaJson();
+    } catch(err) {
+      log({success:false, message:err.message});
+      return;
+    }
+    log('Enregistrement du JSON-LD...');
+    summiteoRest('/schema-save', {
+      id:pageId,
+      schema_type:$('#schema_type').val() || 'LocalBusiness',
+      enabled:$('#schema_enabled').is(':checked'),
+      jsonld:JSON.stringify(parsed, null, 2)
+    })
+      .done(function(resp){ log(resp); })
+      .fail(function(xhr){ log(xhr.responseJSON || xhr.responseText || 'Erreur sauvegarde JSON-LD'); });
+  });
+
   $('#summiteo-openai-test-btn').on('click', function(e){
     e.preventDefault();
     log('Test de connexion IA en cours...');
@@ -550,6 +644,7 @@ JS;
                 <button type="button" class="summiteo-tab" data-tab="clone" role="tab" aria-selected="false">Clonage</button>
                 <button type="button" class="summiteo-tab" data-tab="rewrite" role="tab" aria-selected="false">Contenu</button>
                 <button type="button" class="summiteo-tab" data-tab="images" role="tab" aria-selected="false">Images</button>
+                <button type="button" class="summiteo-tab" data-tab="schema" role="tab" aria-selected="false">Données structurées</button>
                 <button type="button" class="summiteo-tab" data-tab="platform" role="tab" aria-selected="false">Plateforme</button>
                 <button type="button" class="summiteo-tab" data-tab="settings" role="tab" aria-selected="false">Réglages</button>
             </div>
@@ -627,6 +722,31 @@ JS;
                 <button type="button" id="summiteo-repair-avia-images-btn" class="button">Réparer les images Avia</button>
                 <button type="button" id="summiteo-sync-avia-editor-btn" class="button">Synchroniser l’éditeur Avia</button>
                 <p class="description">Les images sont importées dans la médiathèque. Les images Avia, Elementor et l’image mise en avant sont prises en charge.</p>
+            </div>
+            </div>
+
+            <div id="summiteo-tab-schema" class="summiteo-tab-panel" role="tabpanel">
+            <div class="summiteo-card">
+                <h2>Données structurées</h2>
+                <p>Ajoute un JSON-LD spécifique à une page ou un article. Le script est injecté dans le <code>head</code> uniquement sur le contenu ciblé.</p>
+                <div class="summiteo-row"><label>Page ou article cible</label><div><input id="schema_page_id" class="small-text" value="<?php echo esc_attr($s['selected_ai_page_id']); ?>"> <button type="button" id="summiteo-schema-load-btn" class="button">Charger</button></div></div>
+                <div class="summiteo-row"><label>Type de schema</label><select id="schema_type">
+                    <option value="LocalBusiness">LocalBusiness</option>
+                    <option value="RealEstateAgent">RealEstateAgent</option>
+                    <option value="Organization">Organization</option>
+                    <option value="WebPage">WebPage</option>
+                    <option value="Article">Article</option>
+                    <option value="FAQPage">FAQPage</option>
+                    <option value="BreadcrumbList">BreadcrumbList</option>
+                    <option value="Service">Service</option>
+                    <option value="Product">Product</option>
+                </select></div>
+                <div class="summiteo-row"><label>Injection active</label><label><input id="schema_enabled" type="checkbox" value="1" checked> Injecter ce JSON-LD sur le contenu cible</label></div>
+                <div class="summiteo-row"><label>JSON-LD</label><textarea id="schema_jsonld" class="large-text" rows="16" placeholder='{"@context":"https://schema.org","@type":"LocalBusiness","name":""}'></textarea></div>
+                <button type="button" id="summiteo-schema-template-btn" class="button">Générer un modèle</button>
+                <button type="button" id="summiteo-schema-validate-btn" class="button">Valider le JSON</button>
+                <button type="button" id="summiteo-schema-save-btn" class="button button-secondary">Enregistrer sur la page ou l’article</button>
+                <p class="description">Le JSON est validé avant sauvegarde et stocké en meta WordPress sur le contenu sélectionné.</p>
             </div>
             </div>
 
@@ -748,6 +868,12 @@ JS;
         register_rest_route(self::NS, '/sync-avia-editor-images', [
             'methods' => 'POST', 'callback' => [$this, 'rest_sync_avia_editor_images'], 'permission_callback' => [$this, 'can_write']
         ]);
+        register_rest_route(self::NS, '/schema-get', [
+            'methods' => 'POST', 'callback' => [$this, 'rest_schema_get'], 'permission_callback' => [$this, 'can_read']
+        ]);
+        register_rest_route(self::NS, '/schema-save', [
+            'methods' => 'POST', 'callback' => [$this, 'rest_schema_save'], 'permission_callback' => [$this, 'can_write']
+        ]);
     }
 
     public function can_read() {
@@ -767,6 +893,109 @@ JS;
         if (is_wp_error($read)) return $read;
         if (!current_user_can('manage_options')) return new WP_Error('summiteo_ai_forbidden', 'La génération IA est réservée aux administrateurs.', ['status'=>403]);
         return true;
+    }
+
+    private function allowed_schema_types() {
+        return ['LocalBusiness','RealEstateAgent','Organization','WebPage','Article','FAQPage','BreadcrumbList','Service','Product'];
+    }
+
+    private function sanitize_schema_type($type) {
+        $type = sanitize_text_field((string)$type);
+        return in_array($type, $this->allowed_schema_types(), true) ? $type : 'LocalBusiness';
+    }
+
+    private function validate_schema_jsonld($jsonld) {
+        $jsonld = trim((string)$jsonld);
+        if ($jsonld === '') {
+            return new WP_Error('summiteo_schema_empty', 'Le JSON-LD est vide.', ['status'=>400]);
+        }
+        $decoded = json_decode($jsonld, true);
+        if (!is_array($decoded)) {
+            return new WP_Error('summiteo_schema_invalid_json', 'JSON-LD illisible : '.json_last_error_msg(), ['status'=>400]);
+        }
+        $first = $decoded;
+        if (function_exists('array_is_list') && array_is_list($decoded)) {
+            $first = $decoded[0] ?? [];
+        } elseif (array_keys($decoded) === range(0, count($decoded) - 1)) {
+            $first = $decoded[0] ?? [];
+        }
+        $graph = $first;
+        if (is_array($first) && !empty($first['@graph']) && is_array($first['@graph'])) {
+            $graph = $first['@graph'][0] ?? [];
+        }
+        if (!is_array($graph) || (empty($graph['@context']) && empty($first['@context']))) {
+            return new WP_Error('summiteo_schema_missing_context', 'Le champ @context est manquant.', ['status'=>400]);
+        }
+        if (empty($graph['@type'])) {
+            return new WP_Error('summiteo_schema_missing_type', 'Le champ @type est manquant.', ['status'=>400]);
+        }
+        return $decoded;
+    }
+
+    public function rest_schema_get(WP_REST_Request $req) {
+        $id = absint($req->get_param('id'));
+        if (!$id || !get_post($id)) {
+            return new WP_Error('summiteo_schema_not_found', 'Page ou article introuvable.', ['status'=>404]);
+        }
+        return [
+            'success' => true,
+            'id' => $id,
+            'enabled' => get_post_meta($id, self::META_SCHEMA_ENABLED, true) !== '0',
+            'schema_type' => get_post_meta($id, self::META_SCHEMA_TYPE, true) ?: 'LocalBusiness',
+            'jsonld' => get_post_meta($id, self::META_SCHEMA_JSONLD, true) ?: '',
+        ];
+    }
+
+    public function rest_schema_save(WP_REST_Request $req) {
+        $id = absint($req->get_param('id'));
+        $post = $id ? get_post($id) : null;
+        if (!$post) {
+            return new WP_Error('summiteo_schema_not_found', 'Page ou article introuvable.', ['status'=>404]);
+        }
+        if (!current_user_can('edit_post', $id)) {
+            return new WP_Error('summiteo_schema_forbidden', 'Droits insuffisants pour modifier ce contenu.', ['status'=>403]);
+        }
+        $jsonld = (string)$req->get_param('jsonld');
+        $decoded = $this->validate_schema_jsonld($jsonld);
+        if (is_wp_error($decoded)) {
+            return $decoded;
+        }
+        $schema_type = $this->sanitize_schema_type($req->get_param('schema_type'));
+        $enabled = $req->get_param('enabled') ? '1' : '0';
+        $encoded = wp_json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRETTY_PRINT);
+        if (!$encoded) {
+            return new WP_Error('summiteo_schema_encode_failed', 'Impossible de réencoder le JSON-LD.', ['status'=>500]);
+        }
+        update_post_meta($id, self::META_SCHEMA_ENABLED, $enabled);
+        update_post_meta($id, self::META_SCHEMA_TYPE, $schema_type);
+        update_post_meta($id, self::META_SCHEMA_JSONLD, $encoded);
+        return [
+            'success' => true,
+            'id' => $id,
+            'enabled' => $enabled === '1',
+            'schema_type' => $schema_type,
+            'jsonld' => $encoded,
+        ];
+    }
+
+    public function print_structured_data_jsonld() {
+        if (is_admin() || !is_singular()) {
+            return;
+        }
+        $id = get_queried_object_id();
+        if (!$id || get_post_meta($id, self::META_SCHEMA_ENABLED, true) === '0') {
+            return;
+        }
+        $jsonld = trim((string)get_post_meta($id, self::META_SCHEMA_JSONLD, true));
+        if ($jsonld === '') {
+            return;
+        }
+        $decoded = $this->validate_schema_jsonld($jsonld);
+        if (is_wp_error($decoded)) {
+            return;
+        }
+        echo "\n<!-- WP Summiteo JSON-LD -->\n";
+        echo '<script type="application/ld+json">'.wp_json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."</script>\n";
     }
 
     public function rest_ping() { return ['success'=>true, 'plugin'=>'WP Summiteo', 'version'=>self::VERSION]; }
