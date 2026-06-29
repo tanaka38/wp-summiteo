@@ -995,10 +995,33 @@ JS;
             return;
         }
         echo "\n<!-- WP Summiteo JSON-LD -->\n";
-        echo '<script type="application/ld+json">'.wp_json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)."</script>\n";
+        // Securite : JSON_HEX_TAG|JSON_HEX_AMP neutralisent < > & a l'interieur du
+        // <script> (empeche un breakout </script> via une valeur de schema). NE PAS
+        // utiliser JSON_UNESCAPED_SLASHES ici (retirerait la defense par defaut).
+        echo '<script type="application/ld+json">'.wp_json_encode($decoded, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP)."</script>\n";
     }
 
-    public function rest_ping() { return ['success'=>true, 'plugin'=>'WP Summiteo', 'version'=>self::VERSION]; }
+    /**
+     * Detection des capacites d'ecriture du site (043). Expose au connecteur
+     * Summiteo via /ping pour activer/masquer les seams (RankMath/ACF/Schema).
+     */
+    private function summiteo_capabilities() {
+        return [
+            'rankMath' => (defined('RANK_MATH_VERSION') || class_exists('RankMath')),
+            'acf' => (function_exists('acf') || class_exists('ACF')),
+            'schema' => true,
+        ];
+    }
+
+    public function rest_ping() {
+        return [
+            'success' => true,
+            'plugin' => 'WP Summiteo',
+            'version' => self::VERSION,
+            // 043 — capacites annoncees (additif, retro-compatible).
+            'capabilities' => $this->summiteo_capabilities(),
+        ];
+    }
     public function rest_config() {
         $config = self::settings();
         $config['has_openai_api_key'] = !empty($config['openai_api_key']);
