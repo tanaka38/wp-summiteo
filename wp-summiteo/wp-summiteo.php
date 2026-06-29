@@ -878,6 +878,10 @@ JS;
         register_rest_route(self::NS, '/seo-meta', [
             'methods' => 'POST', 'callback' => [$this, 'rest_seo_meta'], 'permission_callback' => [$this, 'can_write']
         ]);
+        // 043 US3 — ecriture de champs ACF (update_field, par cle).
+        register_rest_route(self::NS, '/acf', [
+            'methods' => 'POST', 'callback' => [$this, 'rest_acf'], 'permission_callback' => [$this, 'can_write']
+        ]);
     }
 
     public function can_read() {
@@ -1014,6 +1018,41 @@ JS;
             if ($value === '') continue;
             update_post_meta($id, $meta_key, $value);
             $written[] = $param;
+        }
+        return ['success' => true, 'id' => $id, 'written' => $written];
+    }
+
+    /**
+     * 043 US3 — ecrit des champs ACF (cle => valeur) sur un post existant via
+     * update_field (gere les references field_key ET les noms). v1 : ecriture par
+     * cle, pas de decouverte. Le connecteur Summiteo n'appelle cette route que si
+     * capabilities.acf ; on re-verifie ici (ACF actif) par surete.
+     */
+    public function rest_acf(WP_REST_Request $req) {
+        $id = absint($req->get_param('id'));
+        $post = $id ? get_post($id) : null;
+        if (!$post) {
+            return new WP_Error('summiteo_not_found', 'Page ou article introuvable.', ['status'=>404]);
+        }
+        if (!current_user_can('edit_post', $id)) {
+            return new WP_Error('summiteo_acf_forbidden', 'Droits insuffisants pour modifier ce contenu.', ['status'=>403]);
+        }
+        if (!function_exists('update_field')) {
+            return new WP_Error('summiteo_acf_inactive', 'ACF n\'est pas actif sur ce site.', ['status'=>400]);
+        }
+        $fields = $req->get_param('fields');
+        if (!is_array($fields)) {
+            return new WP_Error('summiteo_acf_invalid', 'Champs ACF invalides (objet attendu).', ['status'=>400]);
+        }
+        $written = [];
+        foreach ($fields as $key => $value) {
+            $key = sanitize_text_field((string)$key);
+            if ($key === '') continue;
+            if (is_string($value)) {
+                $value = sanitize_text_field($value);
+            }
+            update_field($key, $value, $id);
+            $written[] = $key;
         }
         return ['success' => true, 'id' => $id, 'written' => $written];
     }
