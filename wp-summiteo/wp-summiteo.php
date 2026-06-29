@@ -874,6 +874,10 @@ JS;
         register_rest_route(self::NS, '/schema-save', [
             'methods' => 'POST', 'callback' => [$this, 'rest_schema_save'], 'permission_callback' => [$this, 'can_write']
         ]);
+        // 043 US1 — ecriture des meta RankMath (non ecrivables par le REST core).
+        register_rest_route(self::NS, '/seo-meta', [
+            'methods' => 'POST', 'callback' => [$this, 'rest_seo_meta'], 'permission_callback' => [$this, 'can_write']
+        ]);
     }
 
     public function can_read() {
@@ -976,6 +980,42 @@ JS;
             'schema_type' => $schema_type,
             'jsonld' => $encoded,
         ];
+    }
+
+    /**
+     * 043 US1 — ecrit les meta RankMath (rank_math_*) sur un post existant. Ces
+     * meta ne sont PAS ecrivables par le REST core (non enregistrees show_in_rest).
+     * Partiel : seuls les champs fournis et non vides sont ecrits (FR-014). Le
+     * connecteur Summiteo n'appelle cette route que si capabilities.rankMath
+     * (gating serveur) ; on re-verifie ici par surete.
+     */
+    public function rest_seo_meta(WP_REST_Request $req) {
+        $id = absint($req->get_param('id'));
+        $post = $id ? get_post($id) : null;
+        if (!$post) {
+            return new WP_Error('summiteo_not_found', 'Page ou article introuvable.', ['status'=>404]);
+        }
+        if (!current_user_can('edit_post', $id)) {
+            return new WP_Error('summiteo_seo_forbidden', 'Droits insuffisants pour modifier ce contenu.', ['status'=>403]);
+        }
+        if (!defined('RANK_MATH_VERSION') && !class_exists('RankMath')) {
+            return new WP_Error('summiteo_rankmath_inactive', 'RankMath n\'est pas actif sur ce site.', ['status'=>400]);
+        }
+        $map = [
+            'focus_keyword' => 'rank_math_focus_keyword',
+            'seo_title' => 'rank_math_title',
+            'meta_description' => 'rank_math_description',
+        ];
+        $written = [];
+        foreach ($map as $param => $meta_key) {
+            $value = $req->get_param($param);
+            if ($value === null) continue;
+            $value = sanitize_text_field((string)$value);
+            if ($value === '') continue;
+            update_post_meta($id, $meta_key, $value);
+            $written[] = $param;
+        }
+        return ['success' => true, 'id' => $id, 'written' => $written];
     }
 
     public function print_structured_data_jsonld() {
